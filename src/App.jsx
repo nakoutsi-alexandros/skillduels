@@ -2259,19 +2259,6 @@ export default function App() {
       </div>
 
       <div style={{ padding: "10px 18px 0", position: "relative" }}>
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
-          <div style={{ display: "inline-flex", padding: 3, borderRadius: 999, background: "rgba(255,255,255,0.055)",
-            border: `1px solid ${T.border2}`, gap: 3 }}>
-            {[["b", "B"], ["c", "C"], ["a", "A"]].map(([id, label]) => (
-              <button key={id} onClick={() => { window.location.search = id === "b" ? "" : `?ui=${id}`; }}
-                style={{ border: "none", borderRadius: 999, padding: "5px 10px", cursor: "pointer", fontFamily: T.font,
-                  fontSize: 11, fontWeight: 800, color: UI_VARIANT === id ? (IS_C ? "#fff" : "#0A0A0D") : T.sub,
-                  background: UI_VARIANT === id ? T.yellow : "transparent" }}>
-                UI {label}
-              </button>
-            ))}
-          </div>
-        </div>
         {duelOpp ? (
           <>
             <button onClick={() => setDuelOpp(null)}
