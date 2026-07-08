@@ -1,21 +1,38 @@
 import { useState, useEffect, useRef } from "react";
 
 // ================= iOS design tokens =================
+const UI_PARAM = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("ui") : null;
+const UI_VARIANT = UI_PARAM === "a" || UI_PARAM === "c" ? UI_PARAM : "b";
+const IS_B = UI_VARIANT === "b";
+const IS_C = UI_VARIANT === "c";
+
 const T = {
-  bg: "#000000",
-  card: "#1C1C1E",
-  card2: "#2C2C2E",
-  border: "rgba(255,255,255,0.08)",
-  text: "#FFFFFF",
-  sub: "rgba(235,235,245,0.6)",
-  sub2: "rgba(235,235,245,0.3)",
-  blue: "#0A84FF",
-  green: "#30D158",
-  orange: "#FF9F0A",
-  red: "#FF453A",
-  purple: "#BF5AF2",
-  yellow: "#FFD60A",
-  teal: "#64D2FF",
+  bg: IS_C ? "#F6F3FF" : IS_B ? "#07080D" : "#05060A",
+  card: IS_C ? "rgba(255,255,255,0.88)" : IS_B ? "rgba(20,22,26,0.88)" : "rgba(21,24,34,0.74)",
+  card2: IS_C ? "rgba(244,241,255,0.94)" : IS_B ? "rgba(38,35,30,0.92)" : "rgba(38,43,58,0.82)",
+  cardHi: IS_C ? "rgba(255,255,255,0.78)" : IS_B ? "rgba(255,218,112,0.16)" : "rgba(255,255,255,0.12)",
+  border: IS_C ? "rgba(36,28,68,0.12)" : IS_B ? "rgba(255,218,112,0.18)" : "rgba(255,255,255,0.14)",
+  border2: IS_C ? "rgba(36,28,68,0.09)" : IS_B ? "rgba(255,255,255,0.105)" : "rgba(255,255,255,0.085)",
+  text: IS_C ? "#21183D" : "#FFFFFF",
+  sub: IS_C ? "rgba(33,24,61,0.66)" : IS_B ? "rgba(245,241,226,0.68)" : "rgba(239,242,255,0.68)",
+  sub2: IS_C ? "rgba(33,24,61,0.42)" : IS_B ? "rgba(245,241,226,0.42)" : "rgba(239,242,255,0.43)",
+  blue: IS_C ? "#4667FF" : IS_B ? "#5CD6FF" : "#4EA1FF",
+  indigo: IS_C ? "#7D5CFF" : IS_B ? "#6C7CFF" : "#7C6CFF",
+  green: IS_C ? "#13C984" : IS_B ? "#8BFF7A" : "#40E07F",
+  orange: IS_C ? "#FF9D2E" : IS_B ? "#FFB84D" : "#FFAE3D",
+  red: IS_C ? "#FF4F78" : IS_B ? "#FF5B62" : "#FF453A",
+  purple: IS_C ? "#8E55FF" : IS_B ? "#B989FF" : "#C875FF",
+  yellow: IS_C ? "#FFC83D" : IS_B ? "#FFE071" : "#FFE66D",
+  gold: IS_C ? "#F4B72F" : IS_B ? "#FFC85A" : "#FFD36A",
+  teal: IS_C ? "#00B7D8" : IS_B ? "#68F0FF" : "#72E4FF",
+  shadow: IS_C ? "0 18px 42px rgba(86,64,150,0.18)" : IS_B ? "0 18px 46px rgba(0,0,0,0.62)" : "0 20px 60px rgba(0,0,0,0.52)",
+  shadowSm: IS_C ? "0 10px 24px rgba(86,64,150,0.14)" : IS_B ? "0 10px 26px rgba(0,0,0,0.46)" : "0 12px 34px rgba(0,0,0,0.34)",
+  grad: IS_C ? "linear-gradient(135deg, #4667FF, #8E55FF 48%, #FF4F78)" : IS_B ? "linear-gradient(135deg, #FFE071, #FF5B62 48%, #68F0FF)" : "linear-gradient(135deg, #4EA1FF, #7C6CFF 52%, #40E07F)",
+  surface: IS_C
+    ? "linear-gradient(180deg, rgba(255,255,255,0.95), rgba(248,246,255,0.74) 54%, rgba(255,255,255,0.58))"
+    : IS_B
+    ? "linear-gradient(180deg, rgba(255,224,113,0.105), rgba(255,255,255,0.035) 40%, rgba(255,91,98,0.035))"
+    : "linear-gradient(180deg, rgba(255,255,255,0.105), rgba(255,255,255,0.035) 46%, rgba(255,255,255,0.018))",
   font: `'Fredoka', -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif`,
   display: `'Fredoka', -apple-system, BlinkMacSystemFont, sans-serif`,
 };
@@ -67,6 +84,24 @@ const FontImport = () => (
       from { opacity: 0; transform: translateY(16px); }
       to { opacity: 1; transform: translateY(0); }
     }
+    @keyframes auroraDrift {
+      0%, 100% { transform: translate3d(-2%, -1%, 0) scale(1); opacity: 0.84; }
+      50% { transform: translate3d(3%, 2%, 0) scale(1.04); opacity: 1; }
+    }
+    @keyframes softBreathe {
+      0%, 100% { transform: scale(1); filter: brightness(1); }
+      50% { transform: scale(1.025); filter: brightness(1.08); }
+    }
+    @keyframes sheen {
+      0% { transform: translateX(-120%) skewX(-18deg); opacity: 0; }
+      28% { opacity: 0.58; }
+      100% { transform: translateX(180%) skewX(-18deg); opacity: 0; }
+    }
+    @keyframes tabPop {
+      0% { transform: translateY(0) scale(0.96); }
+      55% { transform: translateY(-2px) scale(1.06); }
+      100% { transform: translateY(-1px) scale(1); }
+    }
     @keyframes flamePulse {
       0%, 100% { transform: scale(1); }
       50% { transform: scale(1.22); }
@@ -76,11 +111,24 @@ const FontImport = () => (
       to { opacity: 1; transform: translate(-50%, 0); }
     }
     .enter { animation: slideUp 460ms cubic-bezier(.22,1,.36,1) backwards; }
-    .pressable { transition: transform 130ms ease; }
+    .pressable { transition: transform 150ms ease, filter 180ms ease, border-color 180ms ease; }
+    .pressable:hover { filter: brightness(1.06); }
     .pressable:active { transform: scale(0.96); }
+    .premium-card { position: relative; overflow: hidden; backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); }
+    .premium-card::before {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(135deg, rgba(255,255,255,0.16), transparent 34%, rgba(255,255,255,0.035) 72%, transparent);
+      opacity: 0.86;
+    }
+    .premium-card::after {
+      content: ""; position: absolute; top: 0; bottom: 0; width: 42%; left: 0; pointer-events: none;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
+      animation: sheen 5.8s ease-in-out infinite;
+    }
+    .premium-card > * { position: relative; z-index: 1; }
     button { -webkit-tap-highlight-color: transparent; }
     * { box-sizing: border-box; }
-    html, body { margin: 0; overflow-x: hidden; overscroll-behavior: none; }
+    html, body { margin: 0; overflow-x: hidden; overscroll-behavior: none; background: #05060A; }
     input { font-size: 16px; }
   `}</style>
 );
@@ -246,6 +294,61 @@ const ICONS = {
     </>
   ),
   crownGlyph: <path d="M3 17 2 7l5.5 4L12 4l4.5 7L22 7l-1 10z" />,
+  target: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="5" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+    </>
+  ),
+  heart: <path d="M12 20s-7-4.5-9.3-9C1.2 8 2.6 4.5 6 4.5c2 0 3.2 1.2 4 2.4.8-1.2 2-2.4 4-2.4 3.4 0 4.8 3.5 3.3 6.5C19 15.5 12 20 12 20z" />,
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18" />
+      <path d="M12 3c2.5 2.5 3.8 5.7 3.8 9S14.5 18.5 12 21c-2.5-2.5-3.8-5.7-3.8-9S9.5 5.5 12 3z" />
+    </>
+  ),
+  users: (
+    <>
+      <circle cx="9" cy="8" r="3.4" />
+      <path d="M3.5 20c0-3.3 2.5-5.6 5.5-5.6s5.5 2.3 5.5 5.6" />
+      <path d="M16 5.2a3.2 3.2 0 0 1 0 6" />
+      <path d="M17.5 14.6c2.4.5 4 2.6 4 5.4" />
+    </>
+  ),
+  refresh: (
+    <>
+      <path d="M21 12a9 9 0 1 1-2.6-6.3" />
+      <path d="M21 4v5h-5" />
+    </>
+  ),
+  sound: (
+    <>
+      <path d="M4 9v6h4l5 4V5L8 9H4z" />
+      <path d="M16.5 8.5a5 5 0 0 1 0 7" />
+      <path d="M19 6a8 8 0 0 1 0 12" />
+    </>
+  ),
+  star: <path d="M12 2.5l2.9 5.9 6.6.9-4.8 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.5 9.8l6.6-.9L12 2.5z" />,
+  medal: (
+    <>
+      <path d="M8 3h8l-2.5 6h-3z" />
+      <circle cx="12" cy="15" r="6" />
+      <path d="M12 12.5l1.2 2.4 2.6.4-1.9 1.8.5 2.6-2.4-1.3-2.4 1.3.5-2.6-1.9-1.8 2.6-.4z" fill="currentColor" stroke="none" />
+    </>
+  ),
+  x: <path d="M6 6l12 12M18 6L6 18" />,
+  skull: (
+    <>
+      <path d="M12 3c-4.4 0-8 3.3-8 7.5 0 2.4 1.2 4.3 3 5.6V19a1 1 0 0 0 1 1h1.5" />
+      <path d="M20 10.5C20 6.3 16.4 3 12 3" />
+      <path d="M20 10.5c0 2.4-1.2 4.3-3 5.6V19a1 1 0 0 1-1 1h-1.5" />
+      <path d="M9.5 20v-2M12 20v-2.5M14.5 20v-2" />
+      <circle cx="9" cy="11" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="11" r="1.6" fill="currentColor" stroke="none" />
+    </>
+  ),
 };
 
 const Icon = ({ name, size = 22, color = "#fff", strokeWidth = 2, style }) => (
@@ -331,26 +434,32 @@ const ACTIVITY = [
 
 // ================= UI atoms =================
 const Card = ({ children, style, onClick, delay = 0 }) => (
-  <div onClick={onClick} className={`enter${onClick ? " pressable" : ""}`}
-    style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 26, padding: 18, animationDelay: `${delay}ms`, ...style }}>
+  <div onClick={onClick} className={`premium-card enter${onClick ? " pressable" : ""}`}
+    style={{ background: `${T.surface}, ${T.card}`, border: `1px solid ${T.border2}`, borderRadius: IS_C ? 30 : IS_B ? 16 : 22, padding: 18, animationDelay: `${delay}ms`,
+      boxShadow: IS_C
+        ? `0 8px 0 rgba(70,103,255,0.08), ${T.shadowSm}`
+        : IS_B ? `inset 0 1px 0 ${T.cardHi}, 0 8px 0 rgba(255,224,113,0.08), ${T.shadowSm}` : `inset 0 1px 0 ${T.cardHi}, ${T.shadowSm}`,
+      ...style }}>
     {children}
   </div>
 );
 
 const Pill = ({ children, color = T.blue }) => (
-  <span style={{ fontSize: 12, fontWeight: 700, color, background: `${color}26`, borderRadius: 999, padding: "5px 12px", letterSpacing: 0.2, whiteSpace: "nowrap" }}>
+  <span style={{ fontSize: 12, fontWeight: 700, color, background: `${color}22`, border: `1px solid ${color}28`,
+    borderRadius: 999, padding: "5px 12px", letterSpacing: 0.2, whiteSpace: "nowrap", boxShadow: `0 0 18px ${color}12` }}>
     {children}
   </span>
 );
 
 const H1 = ({ children, sub, right }) => (
-  <>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
-      <h1 style={{ fontSize: 32, fontWeight: 700, margin: "6px 0 2px", letterSpacing: -0.3, fontFamily: T.display }}>{children}</h1>
+  <div style={{ marginBottom: 18, position: "relative" }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+      <h1 style={{ fontSize: 34, fontWeight: 800, margin: "4px 0 0", letterSpacing: 0, fontFamily: T.display, lineHeight: 1.05,
+        textShadow: IS_C ? "none" : "0 14px 34px rgba(0,0,0,0.42)", textTransform: IS_B ? "uppercase" : "none" }}>{children}</h1>
       {right}
     </div>
-    {sub && <div style={{ color: T.sub, fontSize: 15, marginBottom: 18 }}>{sub}</div>}
-  </>
+    {sub && <div style={{ color: T.sub, fontSize: 14.5, marginTop: 5 }}>{sub}</div>}
+  </div>
 );
 
 const Ring = ({ size = 120, stroke = 11, progress = 0, color = T.blue, color2, children }) => {
@@ -382,9 +491,10 @@ const Ring = ({ size = 120, stroke = 11, progress = 0, color = T.blue, color2, c
 
 const BigButton = ({ children, onClick, color = T.blue, style }) => (
   <button onClick={onClick} className="pressable"
-    style={{ width: "100%", padding: "16px 0", borderRadius: 20, border: "none",
-      background: `linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0) 45%), ${color}`, color: "#fff",
-      fontSize: 17, fontWeight: 700, fontFamily: T.display, cursor: "pointer", boxShadow: `0 8px 28px ${color}55`, ...style }}>
+    style={{ width: "100%", padding: "16px 0", borderRadius: IS_C ? 28 : 20, border: "none",
+      background: `linear-gradient(180deg, rgba(255,255,255,0.24), rgba(255,255,255,0.04) 48%), ${color}`, color: "#fff",
+      fontSize: 17, fontWeight: 800, fontFamily: T.display, cursor: "pointer",
+      boxShadow: IS_C ? `0 8px 0 rgba(33,24,61,0.10), 0 16px 30px ${color}28` : `0 12px 34px ${color}4f, inset 0 1px 0 rgba(255,255,255,0.22)`, ...style }}>
     {children}
   </button>
 );
@@ -396,14 +506,36 @@ const Switch = ({ on, toggle }) => (
 );
 
 const Sheet = ({ onClose, children }) => (
-  <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+  <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.62)", backdropFilter: "blur(10px)",
+    WebkitBackdropFilter: "blur(10px)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
     <div onClick={(e) => e.stopPropagation()}
-      style={{ width: "100%", maxWidth: 400, boxSizing: "border-box", background: "#161618", borderRadius: "26px 26px 0 0", padding: "10px 20px 34px",
+      style={{ width: "100%", maxWidth: 400, boxSizing: "border-box",
+        background: "linear-gradient(180deg, rgba(36,40,55,0.96), rgba(12,13,19,0.98))", borderRadius: "28px 28px 0 0", padding: "10px 20px 34px",
         animation: "slideUp 340ms cubic-bezier(.22,1,.36,1)",
-        border: `1px solid ${T.border}`, borderBottom: "none", maxHeight: "85vh", overflowY: "auto", overflowX: "hidden" }}>
+        border: `1px solid ${T.border}`, borderBottom: "none", boxShadow: "0 -24px 80px rgba(0,0,0,0.55)",
+        maxHeight: "85vh", overflowY: "auto", overflowX: "hidden" }}>
       <div style={{ width: 38, height: 5, borderRadius: 3, background: "rgba(255,255,255,0.25)", margin: "6px auto 16px" }} />
       {children}
     </div>
+  </div>
+);
+
+const BrandMark = ({ size = 76 }) => (
+  <div style={{ width: size, height: size, borderRadius: Math.round(size * 0.32),
+    display: "flex", alignItems: "center", justifyContent: "center",
+    background: IS_C
+      ? "linear-gradient(145deg, #4667FF, #8E55FF 54%, #FF4F78)"
+      : IS_B
+      ? "linear-gradient(145deg, rgba(255,224,113,0.32), rgba(255,91,98,0.20) 48%, rgba(104,240,255,0.16))"
+      : "linear-gradient(145deg, rgba(78,161,255,0.34), rgba(124,108,255,0.22) 48%, rgba(64,224,127,0.18))",
+    border: IS_C ? "5px solid rgba(255,255,255,0.72)" : IS_B ? "1px solid rgba(255,224,113,0.32)" : "1px solid rgba(255,255,255,0.18)",
+    boxShadow: IS_C
+      ? "0 10px 0 rgba(70,103,255,0.14), 0 22px 42px rgba(142,85,255,0.22)"
+      : IS_B
+      ? "0 22px 54px rgba(255,91,98,0.18), 0 8px 0 rgba(255,224,113,0.12), inset 0 1px 0 rgba(255,255,255,0.22)"
+      : "0 22px 54px rgba(78,161,255,0.22), inset 0 1px 0 rgba(255,255,255,0.22)",
+    animation: "softBreathe 3.8s ease-in-out infinite" }}>
+    <Icon name="swords" size={Math.round(size * 0.52)} color="#fff" strokeWidth={1.85} />
   </div>
 );
 
@@ -635,8 +767,10 @@ function MemoryGame({ onFinish }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}>
       <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
         <Pill color={T.purple}>Level {level}</Pill>
-        <Pill color={phase === "input" && timeLeft <= 3 ? T.red : T.teal}>⏱ {phase === "input" ? Math.max(0, timeLeft).toFixed(1) : budget.toFixed(0)}"</Pill>
-        <span style={{ fontSize: 15 }}>{"❤️".repeat(Math.max(0, lives))}{"🖤".repeat(Math.max(0, 3 - lives))}</span>
+        <Pill color={phase === "input" && timeLeft <= 3 ? T.red : T.teal}>{phase === "input" ? Math.max(0, timeLeft).toFixed(1) : budget.toFixed(0)}"</Pill>
+        <span style={{ display: "flex", gap: 3 }}>{[0, 1, 2].map((n) => (
+          <Icon key={n} name="heart" size={15} color={n < lives ? T.red : "rgba(255,255,255,0.18)"} strokeWidth={0} style={{ fill: n < lives ? T.red : "rgba(255,255,255,0.18)" }} />
+        ))}</span>
       </div>
       {/* time bar */}
       <div style={{ width: "100%", maxWidth: 300, height: 5, borderRadius: 3, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
@@ -710,7 +844,10 @@ function MathGame({ onFinish }) {
   if (!started)
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}>
-        <div style={{ fontSize: 52 }}>➗</div>
+        <div style={{ width: 84, height: 84, borderRadius: 26, display: "flex", alignItems: "center", justifyContent: "center",
+          background: `linear-gradient(135deg, ${T.orange}2e, ${T.orange}0d)`, border: `1px solid ${T.orange}40` }}>
+          <Icon name="divide" size={40} color={T.orange} strokeWidth={2.2} />
+        </div>
         <div style={{ color: T.sub, textAlign: "center", fontSize: 15 }}>Solve as many problems as you can in 30 seconds.</div>
         <BigButton color={T.orange} onClick={() => setStarted(true)}>Start</BigButton>
       </div>
@@ -778,7 +915,10 @@ function TypingGame({ onFinish }) {
   if (!started)
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}>
-        <div style={{ fontSize: 52 }}>⌨️</div>
+        <div style={{ width: 84, height: 84, borderRadius: 26, display: "flex", alignItems: "center", justifyContent: "center",
+          background: `linear-gradient(135deg, ${T.green}2e, ${T.green}0d)`, border: `1px solid ${T.green}40` }}>
+          <Icon name="keyboard" size={40} color={T.green} strokeWidth={2} />
+        </div>
         <div style={{ color: T.sub, textAlign: "center", fontSize: 15 }}>Type the words as fast as you can — 30 seconds.</div>
         <BigButton color={T.green} onClick={() => { setStarted(true); setTimeout(() => inputRef.current?.focus(), 50); }}>Start</BigButton>
       </div>
@@ -876,7 +1016,11 @@ function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "r
   const won = myScore.pts > oppScore.current.pts;
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, paddingTop: 20 }}>
-      <div style={{ fontSize: 60 }}>{won ? "🏆" : "💀"}</div>
+      <div style={{ width: 88, height: 88, borderRadius: 28, display: "flex", alignItems: "center", justifyContent: "center",
+        background: `linear-gradient(135deg, ${won ? T.green : T.red}30, ${won ? T.green : T.red}0d)`,
+        border: `1px solid ${won ? T.green : T.red}44`, boxShadow: `0 8px 30px ${won ? T.green : T.red}33` }}>
+        <Icon name={won ? "trophy" : "skull"} size={44} color={won ? T.gold : T.red} strokeWidth={2} />
+      </div>
       <div style={{ fontSize: 28, fontWeight: 700, color: won ? T.green : T.red, fontFamily: T.display }}>{won ? "WIN!" : "LOSS"}</div>
       <Card style={{ width: "100%", display: "flex", justifyContent: "space-around", textAlign: "center" }}>
         <div>
@@ -908,18 +1052,19 @@ function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "r
 }
 
 // ================= Reward opening animation =================
-const CONFETTI = ["\u2728", "\u2B50\uFE0F", "\uD83C\uDF89", "\uD83D\uDFE1", "\uD83D\uDC9B", "\uD83C\uDF1F"];
+const CONFETTI = ["#FFD60A", "#64D2FF", "#30D158", "#FF9F0A", "#BF5AF2", "#0A84FF", "#FF375F"];
 
 function RewardOverlay({ onDone }) {
   const [phase, setPhase] = useState("shake"); // shake | burst
   const particles = useRef(
-    Array.from({ length: 22 }, (_, i) => ({
-      emoji: CONFETTI[i % CONFETTI.length],
+    Array.from({ length: 26 }, (_, i) => ({
+      color: CONFETTI[i % CONFETTI.length],
+      round: i % 2 === 0,
       dx: `${Math.round(Math.random() * 280 - 140)}px`,
       dy: `${Math.round(-40 - Math.random() * 230)}px`,
       rot: `${Math.round(Math.random() * 540 - 270)}deg`,
       delay: Math.random() * 0.15,
-      size: 16 + Math.round(Math.random() * 14),
+      size: 8 + Math.round(Math.random() * 7),
     }))
   );
 
@@ -953,7 +1098,9 @@ function RewardOverlay({ onDone }) {
       <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
         {phase === "shake" ? (
           <>
-            <div style={{ fontSize: 96, animation: "giftShake 1.15s ease-in-out", transformOrigin: "50% 90%" }}>🎁</div>
+            <div style={{ animation: "giftShake 1.15s ease-in-out", transformOrigin: "50% 90%", filter: `drop-shadow(0 8px 24px ${T.yellow}66)` }}>
+              <Icon name="gift" size={92} color={T.yellow} strokeWidth={1.7} />
+            </div>
             <div style={{ color: T.sub, fontSize: 14, fontWeight: 700 }}>Opening…</div>
           </>
         ) : (
@@ -966,13 +1113,14 @@ function RewardOverlay({ onDone }) {
             {/* confetti */}
             {particles.current.map((pt, i) => (
               <span key={i}
-                style={{ position: "absolute", top: 60, fontSize: pt.size, pointerEvents: "none",
+                style={{ position: "absolute", top: 60, width: pt.size, height: pt.size, background: pt.color,
+                  borderRadius: pt.round ? "50%" : 3, pointerEvents: "none",
                   "--dx": pt.dx, "--dy": pt.dy, "--rot": pt.rot,
-                  animation: `confettiFly 1s cubic-bezier(.16,.8,.4,1) ${pt.delay}s forwards` }}>
-                {pt.emoji}
-              </span>
+                  animation: `confettiFly 1s cubic-bezier(.16,.8,.4,1) ${pt.delay}s forwards` }} />
             ))}
-            <div style={{ fontSize: 96, animation: "popIn 550ms cubic-bezier(.34,1.56,.64,1)" }}>🎉</div>
+            <div style={{ animation: "popIn 550ms cubic-bezier(.34,1.56,.64,1)", filter: `drop-shadow(0 0 26px ${T.yellow}88)` }}>
+              <Icon name="gift" size={96} color={T.yellow} strokeWidth={1.7} />
+            </div>
             <div style={{ fontSize: 40, fontWeight: 700, fontFamily: T.display, color: T.yellow,
               animation: "popIn 600ms cubic-bezier(.34,1.56,.64,1) 150ms backwards",
               textShadow: `0 0 30px ${T.yellow}66` }}>
@@ -1047,9 +1195,9 @@ function Onboarding({ onDone }) {
       height: "100%", overflowY: "auto", boxSizing: "border-box" }}>
       {step === 0 && (
         <>
-          <div style={{ fontSize: 64, animation: "popIn 700ms cubic-bezier(.34,1.56,.64,1)" }}>⚔️</div>
-          <div style={{ fontSize: 34, fontWeight: 700, letterSpacing: -0.3, fontFamily: T.display,
-            background: "linear-gradient(90deg, #0A84FF, #64D2FF, #30D158)",
+          <BrandMark size={82} />
+          <div style={{ fontSize: 36, fontWeight: 800, letterSpacing: 0, fontFamily: T.display,
+            background: "linear-gradient(90deg, #FFFFFF, #72E4FF 45%, #40E07F)",
             WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Skill Duels</div>
           <div style={{ color: T.sub, fontSize: 15, textAlign: "center", marginBottom: 22 }}>
             One challenge a day.<br />One attempt. Who's the fastest?
@@ -1062,16 +1210,18 @@ function Onboarding({ onDone }) {
             {AVATARS.map((a) => (
               <button key={a} className="pressable" onClick={() => { setAvatar(a); Sound.beep(700, 0.05); }}
                 style={{ padding: 7, borderRadius: 16, cursor: "pointer", display: "flex", justifyContent: "center",
-                  border: `2px solid ${avatar === a ? T.blue : "transparent"}`,
-                  background: avatar === a ? "rgba(10,132,255,0.15)" : T.card, transition: "all 150ms" }}>
+                  border: `2px solid ${avatar === a ? T.teal : "rgba(255,255,255,0.06)"}`,
+                  background: avatar === a ? "rgba(78,161,255,0.17)" : T.card, transition: "all 150ms",
+                  boxShadow: avatar === a ? `0 0 24px ${T.blue}26` : "none" }}>
                 <Avatar id={a} size={54} />
               </button>
             ))}
           </div>
           <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, alignSelf: "flex-start", letterSpacing: 0.3, marginBottom: 8 }}>USERNAME</div>
           <input value={name} onChange={(e) => setName(e.target.value.slice(0, 16))} autoComplete="off"
-            style={{ width: "100%", padding: "15px 18px", borderRadius: 16, border: `1px solid ${T.border}`, background: T.card,
-              color: "#fff", fontSize: 17, fontFamily: T.font, outline: "none", marginBottom: 24, boxSizing: "border-box" }} />
+            style={{ width: "100%", padding: "15px 18px", borderRadius: 16, border: `1px solid ${T.border}`,
+              background: "rgba(255,255,255,0.07)", color: "#fff", fontSize: 17, fontFamily: T.font, outline: "none",
+              marginBottom: 24, boxSizing: "border-box", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)" }} />
           <BigButton onClick={() => name.trim() && next()}>Continue</BigButton>
           <div style={{ color: T.sub2, fontSize: 12, marginTop: 12 }}>No signup · play in 30 seconds</div>
         </>
@@ -1127,14 +1277,13 @@ function Onboarding({ onDone }) {
 function ShopScreen({ coins, owned, onBuy, onBuyCoins, onEquip, equipped }) {
   return (
     <>
-      <H1 right={
+      <H1 sub="Cosmetics only — style, never advantage" right={
         <div style={{ display: "flex", alignItems: "center", gap: 6, background: T.card, border: `1px solid ${T.yellow}44`,
-          borderRadius: 999, padding: "7px 13px", marginBottom: 6 }}>
+          borderRadius: 999, padding: "7px 13px", flexShrink: 0 }}>
           <Icon name="coin" size={16} color={T.yellow} />
           <span style={{ fontWeight: 700, fontFamily: T.display, color: T.yellow, fontSize: 15 }}>{coins.toLocaleString()}</span>
         </div>
       }>Shop</H1>
-      <div style={{ color: T.sub, fontSize: 14, marginBottom: 16, marginTop: -10 }}>Cosmetics only — style, never advantage</div>
 
       {/* Coin packs */}
       <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, margin: "0 4px 10px", letterSpacing: 0.3 }}>GET COINS</div>
@@ -1203,14 +1352,149 @@ function ShopScreen({ coins, owned, onBuy, onBuyCoins, onEquip, equipped }) {
 // ================= Screens =================
 function TodayScreen({ playedGames, openGame, openPractice, onPractice, streak, totalPts, countdown, rewardClaimed, claimReward, onShare, onDuel, onHelp, balance, challengesLeft, onWatchAd, canWatchAd, adSlotsLeft }) {
   const playedCount = Object.keys(playedGames).length;
+  if (IS_C) {
+    const nextGame = GAMES.find((g) => !playedGames[g.id]) || GAMES[0];
+    return (
+      <div style={{ margin: "0 -4px 100px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 900, color: T.purple, letterSpacing: 1.2 }}>DAILY ARCADE</div>
+            <div style={{ fontSize: 34, fontWeight: 900, lineHeight: 0.98, fontFamily: T.display }}>Pick your run</div>
+          </div>
+          <button onClick={onHelp} className="pressable"
+            style={{ width: 46, height: 46, borderRadius: 18, border: `1px solid ${T.border}`, background: "#fff",
+              boxShadow: "0 8px 0 rgba(70,103,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Icon name="help" size={19} color={T.purple} />
+          </button>
+        </div>
+
+        <div style={{ position: "relative", borderRadius: 38, padding: "22px 20px 20px", marginBottom: 16,
+          background: "linear-gradient(145deg, #4667FF, #8E55FF 54%, #FF4F78)",
+          boxShadow: "0 12px 0 rgba(70,103,255,0.16), 0 28px 54px rgba(86,64,150,0.28)", overflow: "hidden" }}>
+          <div style={{ position: "absolute", right: -28, top: -28, width: 148, height: 148, borderRadius: "50%",
+            background: "rgba(255,255,255,0.15)" }} />
+          <div style={{ position: "absolute", right: 26, bottom: 18, width: 70, height: 70, borderRadius: 24,
+            border: "2px solid rgba(255,255,255,0.26)", transform: "rotate(12deg)" }} />
+          <div style={{ position: "relative", color: "#fff" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 800, opacity: 0.78 }}>Season Points</div>
+                <div style={{ fontSize: 48, fontWeight: 900, lineHeight: 0.95, fontFamily: T.display }}>{totalPts.toLocaleString()}</div>
+              </div>
+              <div style={{ minWidth: 72, textAlign: "center", background: "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.26)",
+                borderRadius: 22, padding: "10px 9px" }}>
+                <div style={{ fontSize: 24, fontWeight: 900, fontFamily: T.display }}>{playedCount}/4</div>
+                <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.78 }}>DONE</div>
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+              {[
+                ["flame", T.yellow, streak, "streak"],
+                ["coin", T.yellow, balance, "balance"],
+                ["swords", "#fff", challengesLeft, "duels"],
+              ].map(([ic, col, val, lab]) => (
+                <div key={lab} style={{ background: "rgba(255,255,255,0.16)", border: "1px solid rgba(255,255,255,0.20)",
+                  borderRadius: 20, padding: "10px 8px" }}>
+                  <Icon name={ic} size={16} color={col} />
+                  <div style={{ fontSize: 18, fontWeight: 900, fontFamily: T.display, marginTop: 3 }}>{val}</div>
+                  <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.72 }}>{lab}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1.15fr 0.85fr", gap: 12, marginBottom: 16 }}>
+          <button className="pressable" onClick={() => openGame(nextGame.id)}
+            style={{ textAlign: "left", border: "none", borderRadius: 32, padding: 18, minHeight: 166, cursor: "pointer",
+              background: "#fff", boxShadow: `0 10px 0 ${nextGame.color}20, 0 20px 36px rgba(86,64,150,0.12)`, position: "relative", overflow: "hidden" }}>
+            <div style={{ position: "absolute", right: -20, bottom: -24, width: 120, height: 120, borderRadius: 38,
+              background: `${nextGame.color}18`, transform: "rotate(-12deg)" }} />
+            <div style={{ position: "relative" }}>
+              <div style={{ width: 58, height: 58, borderRadius: 24, background: `${nextGame.color}18`,
+                display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+                <Icon name={nextGame.icon} size={29} color={nextGame.color} />
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 900, color: nextGame.color, letterSpacing: 0.9 }}>NEXT RUN</div>
+              <div style={{ fontSize: 23, lineHeight: 1.02, fontWeight: 900, fontFamily: T.display, color: T.text }}>{nextGame.name}</div>
+              <div style={{ marginTop: 8, color: T.sub, fontSize: 12, fontWeight: 700 }}>{nextGame.desc}</div>
+            </div>
+          </button>
+
+          <div style={{ display: "grid", gap: 12 }}>
+            <button className="pressable" onClick={rewardClaimed ? undefined : claimReward}
+              style={{ border: "none", borderRadius: 28, padding: 14, background: rewardClaimed ? "#F2F0FA" : "#FFF5D6",
+                boxShadow: "0 8px 0 rgba(255,200,61,0.12)", textAlign: "left", cursor: rewardClaimed ? "default" : "pointer" }}>
+              <Icon name={rewardClaimed ? "check" : "gift"} size={24} color={rewardClaimed ? T.green : T.gold} />
+              <div style={{ fontSize: 14, fontWeight: 900, marginTop: 10, color: T.text }}>{rewardClaimed ? "Claimed" : "Gift"}</div>
+              <div style={{ color: T.sub, fontSize: 11, fontWeight: 700 }}>+50 points</div>
+            </button>
+            <button className="pressable" onClick={onPractice}
+              style={{ border: "none", borderRadius: 28, padding: 14, background: "#EFFFF8",
+                boxShadow: "0 8px 0 rgba(19,201,132,0.12)", textAlign: "left", cursor: "pointer" }}>
+              <Icon name="dumbbell" size={24} color={T.green} />
+              <div style={{ fontSize: 14, fontWeight: 900, marginTop: 10, color: T.text }}>Practice</div>
+              <div style={{ color: T.sub, fontSize: 11, fontWeight: 700 }}>free runs</div>
+            </button>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ fontSize: 15, fontWeight: 900 }}>Game shelf</div>
+          <button onClick={onDuel} className="pressable"
+            style={{ border: "none", borderRadius: 999, background: T.text, color: "#fff", padding: "8px 12px",
+              display: "flex", alignItems: "center", gap: 6, fontFamily: T.font, fontWeight: 900, fontSize: 12 }}>
+            <Icon name="swords" size={14} color="#fff" /> Challenge
+          </button>
+        </div>
+
+        <div style={{ display: "flex", gap: 12, overflowX: "auto", padding: "0 2px 18px", margin: "0 -2px" }}>
+          {GAMES.map((g, i) => {
+            const res = playedGames[g.id];
+            return (
+              <button key={g.id} className="pressable" onClick={() => openGame(g.id)}
+                style={{ minWidth: 154, border: "none", borderRadius: 30, padding: 14, textAlign: "left", cursor: "pointer",
+                  background: res ? `${g.color}18` : "#fff", boxShadow: `0 8px 0 ${g.color}18, 0 16px 30px rgba(86,64,150,0.10)` }}>
+                <div style={{ width: 48, height: 48, borderRadius: 20, background: `${g.color}1d`, display: "flex",
+                  alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+                  <Icon name={g.icon} size={24} color={g.color} />
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 900, color: T.text, lineHeight: 1.05 }}>{g.name}</div>
+                <div style={{ color: res ? g.color : T.sub, fontSize: 12, fontWeight: 800, marginTop: 8 }}>
+                  {res ? `+${res.pts} pts` : i === 0 ? "tap to play" : "locked for today?"}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: canWatchAd ? "1fr 1fr" : "1fr", gap: 10 }}>
+          {canWatchAd && (
+            <button className="pressable" onClick={onWatchAd}
+              style={{ border: "none", borderRadius: 24, padding: "13px 10px", background: "#EFFFF8", color: T.green,
+                fontWeight: 900, fontFamily: T.font }}>
+              <Icon name="playAd" size={16} color={T.green} /> +1 try ({adSlotsLeft})
+            </button>
+          )}
+          {playedCount > 0 && (
+            <button className="pressable" onClick={onShare}
+              style={{ border: "none", borderRadius: 24, padding: "13px 10px", background: "#EEF1FF", color: T.blue,
+                fontWeight: 900, fontFamily: T.font }}>
+              <Icon name="share" size={16} color={T.blue} /> Share score
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
   return (
     <>
       <H1
         right={
           <button onClick={onHelp} className="pressable"
-            style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 999, width: 36, height: 36,
-              cursor: "pointer", marginBottom: 6, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Icon name="help" size={17} color={T.sub} />
+            style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 999, width: 38, height: 38, flexShrink: 0,
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Icon name="help" size={18} color={T.sub} />
           </button>
         }
         sub={<>Friday July 3 · new games at midnight</>}>
@@ -1218,8 +1502,11 @@ function TodayScreen({ playedGames, openGame, openPractice, onPractice, streak, 
       </H1>
 
       <Card style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 14,
-        background: "linear-gradient(135deg, rgba(10,132,255,0.16), rgba(48,209,88,0.07) 65%), #1C1C1E",
-        borderColor: "rgba(10,132,255,0.28)" }}>
+        background: IS_C
+          ? "radial-gradient(190px 130px at 8% 4%, rgba(70,103,255,0.16), transparent 64%), linear-gradient(135deg, rgba(255,255,255,0.96), rgba(240,246,255,0.88))"
+          : "radial-gradient(220px 140px at 12% 12%, rgba(114,228,255,0.24), transparent 64%), linear-gradient(135deg, rgba(78,161,255,0.18), rgba(64,224,127,0.09) 68%), rgba(21,24,34,0.82)",
+        borderColor: IS_C ? "rgba(70,103,255,0.14)" : "rgba(114,228,255,0.24)",
+        boxShadow: IS_C ? "0 12px 0 rgba(70,103,255,0.08), 0 20px 44px rgba(86,64,150,0.14)" : "0 18px 46px rgba(78,161,255,0.14), inset 0 1px 0 rgba(255,255,255,0.16)" }}>
         <Ring size={96} stroke={10} progress={playedCount / 4} color={T.green} color2={T.teal}>
           <div style={{ fontSize: 22, fontWeight: 700, fontFamily: T.display }}>{playedCount}/4</div>
         </Ring>
@@ -1268,7 +1555,9 @@ function TodayScreen({ playedGames, openGame, openPractice, onPractice, streak, 
       {/* Ranked challenge entry */}
       <Card delay={130} onClick={onDuel}
         style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16, padding: 14, cursor: "pointer",
-          background: "linear-gradient(135deg, rgba(255,69,58,0.14), rgba(191,90,242,0.06) 70%), #1C1C1E",
+          background: IS_C
+            ? "radial-gradient(170px 110px at 0% 0%, rgba(255,79,120,0.18), transparent 64%), linear-gradient(135deg, rgba(255,255,255,0.96), rgba(255,242,248,0.86))"
+            : "radial-gradient(180px 110px at 0% 0%, rgba(255,69,58,0.24), transparent 64%), linear-gradient(135deg, rgba(255,69,58,0.14), rgba(200,117,255,0.08) 70%), rgba(21,24,34,0.84)",
           border: `1px solid ${T.red}44` }}>
         <div style={{ width: 50, height: 50, borderRadius: 17, display: "flex", alignItems: "center", justifyContent: "center",
           flexShrink: 0, background: "rgba(255,69,58,0.14)", border: "1px solid rgba(255,69,58,0.4)" }}>
@@ -1357,8 +1646,11 @@ function SeasonScreen({ seasonPts, username, avatar, countdown, seasonName, onRe
 
       {/* Season hero: your rank + season points */}
       <Card style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 14,
-        background: "linear-gradient(135deg, rgba(255,214,10,0.16), rgba(191,90,242,0.06) 70%), #1C1C1E",
-        borderColor: "rgba(255,214,10,0.3)" }}>
+        background: IS_C
+          ? "radial-gradient(190px 130px at 6% 0%, rgba(255,200,61,0.22), transparent 64%), linear-gradient(135deg, rgba(255,255,255,0.96), rgba(255,249,231,0.88))"
+          : "radial-gradient(200px 140px at 6% 0%, rgba(255,230,109,0.24), transparent 64%), linear-gradient(135deg, rgba(255,214,10,0.16), rgba(200,117,255,0.08) 70%), rgba(21,24,34,0.86)",
+        borderColor: IS_C ? "rgba(244,183,47,0.18)" : "rgba(255,230,109,0.28)",
+        boxShadow: IS_C ? "0 12px 0 rgba(244,183,47,0.08), 0 20px 44px rgba(86,64,150,0.12)" : "0 18px 48px rgba(255,214,10,0.12), inset 0 1px 0 rgba(255,255,255,0.16)" }}>
         <div style={{ textAlign: "center", minWidth: 62 }}>
           <div style={{ fontSize: 30, fontWeight: 700, fontFamily: T.display, color: myRank <= 3 ? T.yellow : T.text }}>#{myRank}</div>
           <div style={{ color: T.sub2, fontSize: 10 }}>your rank</div>
@@ -1400,7 +1692,7 @@ function SeasonScreen({ seasonPts, username, avatar, countdown, seasonName, onRe
                 {r.name} {r.me && "· you"}
               </span>
               {rw && <Icon name="crown" size={13} color={rw.color} />}
-              <span style={{ fontWeight: 700, fontSize: 13.5, color: T.yellow, minWidth: 52, textAlign: "right" }}>{r.pts.toLocaleString()}</span>
+              <span style={{ fontWeight: 700, fontSize: 13.5, color: rw ? rw.color : T.text, minWidth: 52, textAlign: "right", fontFamily: T.display }}>{r.pts.toLocaleString()}</span>
             </div>
           );
         })}
@@ -1418,40 +1710,46 @@ function LeaderboardScreen({ userEntry, onChallenge }) {
     <>
       <H1 sub="This season · Season Points">Ranking</H1>
       <div style={{ display: "flex", background: T.card, borderRadius: 12, padding: 3, marginBottom: 16, border: `1px solid ${T.border}` }}>
-        {[["global", "🌍 Global"], ["friends", "👥 Friends"]].map(([id, label]) => (
+        {[["global", "Global", "globe"], ["friends", "Friends", "users"]].map(([id, label, icon]) => (
           <button key={id} onClick={() => setFilter(id)}
             style={{ flex: 1, padding: "9px 0", borderRadius: 10, border: "none",
               background: filter === id ? T.card2 : "transparent", color: filter === id ? T.text : T.sub,
-              fontSize: 14, fontWeight: 700, fontFamily: T.font, cursor: "pointer", transition: "background 200ms" }}>
-            {label}
+              fontSize: 14, fontWeight: 700, fontFamily: T.font, cursor: "pointer", transition: "background 200ms",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            <Icon name={icon} size={15} color={filter === id ? T.text : T.sub} strokeWidth={2.1} /> {label}
           </button>
         ))}
       </div>
 
-      <div style={{ display: "flex", justifyContent: "center", gap: 14, marginBottom: 18, alignItems: "flex-end" }}>
+      <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 20, alignItems: "flex-end" }}>
         {rows.length >= 3 &&
           [rows[1], rows[0], rows[2]].map((r, i) => {
             const place = i === 1 ? 1 : i === 0 ? 2 : 3;
-            const h = place === 1 ? 84 : place === 2 ? 64 : 52;
+            const mc = place === 1 ? "#FFC93C" : place === 2 ? "#C7CAD1" : "#E0965A";
+            const h = place === 1 ? 92 : place === 2 ? 68 : 54;
+            const av = place === 1 ? 54 : 44;
             return (
-              <div key={r.name} style={{ textAlign: "center", width: 92 }}>
-                <div style={{ position: "relative", display: "flex", justifyContent: "center", marginBottom: 5 }}>
+              <div key={r.name} style={{ textAlign: "center", width: place === 1 ? 104 : 92, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <div style={{ position: "relative", display: "flex", justifyContent: "center", marginBottom: 6 }}>
                   {place === 1 && (
-                    <div style={{ position: "absolute", top: -20, transform: "rotate(-10deg)", display: "flex" }}>
-                      <Icon name="crown" size={17} color={T.yellow} strokeWidth={2.2} />
+                    <div style={{ position: "absolute", top: -19, left: "50%", transform: "translateX(-50%) rotate(-8deg)", display: "flex", filter: `drop-shadow(0 2px 5px ${mc}88)` }}>
+                      <Icon name="crown" size={20} color={mc} strokeWidth={2.3} />
                     </div>
                   )}
-                  <div style={{ borderRadius: 25, padding: 2,
-                    border: `2px solid ${place === 1 ? T.yellow : place === 2 ? "#C0C0C0" : "#CD7F32"}`,
-                    boxShadow: `0 0 16px ${place === 1 ? T.yellow : place === 2 ? "#C0C0C0" : "#CD7F32"}44` }}>
-                    <Avatar id={r.avatar || "knight"} size={42} />
+                  <div style={{ borderRadius: (av + 6) / 2, padding: 3, background: T.bg,
+                    border: `2.5px solid ${mc}`, boxShadow: `0 0 18px ${mc}55` }}>
+                    <Avatar id={r.avatar || "knight"} size={av} />
                   </div>
                 </div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: r.me ? T.blue : T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</div>
-                <div style={{ color: T.sub, fontSize: 11, marginBottom: 6 }}>{r.pts} pts</div>
-                <div style={{ height: h, borderRadius: "12px 12px 0 0",
-                  background: `linear-gradient(180deg, ${place === 1 ? T.yellow : place === 2 ? "#C0C0C0" : "#CD7F32"}55, transparent)`,
-                  border: `1px solid ${T.border}`, borderBottom: "none" }} />
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: r.me ? T.blue : T.text, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</div>
+                <div style={{ color: mc, fontSize: 11.5, fontWeight: 700, fontFamily: T.display, marginBottom: 7 }}>{r.pts.toLocaleString()}</div>
+                <div style={{ width: "100%", height: h, borderRadius: "14px 14px 0 0", position: "relative",
+                  background: `linear-gradient(180deg, ${mc}38, ${mc}12 70%, ${mc}08)`,
+                  border: `1px solid ${mc}40`, borderBottom: "none",
+                  boxShadow: `inset 0 1px 0 ${mc}55` }}>
+                  <div style={{ position: "absolute", top: 10, left: 0, right: 0, textAlign: "center",
+                    fontSize: place === 1 ? 26 : 20, fontWeight: 800, fontFamily: T.display, color: mc, opacity: 0.95 }}>{place}</div>
+                </div>
               </div>
             );
           })}
@@ -1476,7 +1774,7 @@ function LeaderboardScreen({ userEntry, onChallenge }) {
                 <Icon name="swords" size={12} color={T.red} /> Bet
               </button>
             )}
-            <span style={{ fontWeight: 700, fontSize: 14, color: T.yellow, width: 44, textAlign: "right" }}>{r.pts}</span>
+            <span style={{ fontWeight: 700, fontSize: 14, color: i < 3 ? ["#FFC93C", "#C7CAD1", "#E0965A"][i] : T.text, width: 44, textAlign: "right", fontFamily: T.display }}>{r.pts}</span>
           </div>
         ))}
         {!userEntry && (
@@ -1496,18 +1794,18 @@ function ProfileScreen({ elo, streak, playedGames, totalPts, duelRecord, openSet
   const max = Math.max(...week, 1);
   const days = ["S", "M", "T", "W", "T", "F", "S"];
   const achievements = [
-    { icon: "⚡️", name: "First Duel", desc: "Play your first duel", done: played >= 1 },
-    { icon: "🎯", name: "Full House", desc: "Play all 4 duels in one day", done: played >= 4 },
-    { icon: "⚔️", name: "Duelist", desc: "Win a 1v1 duel", done: duelRecord.w >= 1 },
-    { icon: "🔥", name: "Fire Week", desc: "7 day streak", done: streak >= 7 },
-    { icon: "💎", name: "Diamond Mind", desc: "Reach 1700 ELO", done: elo >= 1700 },
+    { icon: "bolt", color: T.blue, name: "First Duel", desc: "Play your first duel", done: played >= 1 },
+    { icon: "target", color: T.orange, name: "Full House", desc: "Play all 4 duels in one day", done: played >= 4 },
+    { icon: "swords", color: T.red, name: "Duelist", desc: "Win a 1v1 duel", done: duelRecord.w >= 1 },
+    { icon: "flame", color: T.orange, name: "Fire Week", desc: "7 day streak", done: streak >= 7 },
+    { icon: "gem", color: T.purple, name: "Diamond Mind", desc: "Reach 1700 ELO", done: elo >= 1700 },
   ];
   return (
     <>
       <H1 right={
         <button onClick={openSettings} className="pressable"
-          style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 999, width: 38, height: 38,
-            cursor: "pointer", marginBottom: 6, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 999, width: 38, height: 38, flexShrink: 0,
+            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <Icon name="sliders" size={17} color="#fff" />
         </button>
       }>Profile</H1>
@@ -1536,39 +1834,63 @@ function ProfileScreen({ elo, streak, playedGames, totalPts, duelRecord, openSet
       </Card>
 
       <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
-        {[["🔥", streak, "streak"], ["⚔️", `${duelRecord.w}-${duelRecord.l}`, "duel W-L"], ["🏆", seasonPts.toLocaleString(), "season pts"]].map(([ic, val, lab]) => (
-          <Card key={lab} style={{ flex: 1, textAlign: "center", padding: 14 }}>
-            <div style={{ fontSize: 22 }}>{ic}</div>
-            <div style={{ fontSize: 19, fontWeight: 800 }}>{val}</div>
+        {[["flame", T.orange, streak, "streak"], ["swords", T.blue, `${duelRecord.w}-${duelRecord.l}`, "duel W-L"], ["trophy", T.gold, seasonPts.toLocaleString(), "season pts"]].map(([ic, col, val, lab]) => (
+          <Card key={lab} style={{ flex: 1, textAlign: "center", padding: "16px 10px" }}>
+            <div style={{ width: 34, height: 34, borderRadius: 11, margin: "0 auto 8px", display: "flex", alignItems: "center", justifyContent: "center",
+              background: `${col}1f`, border: `1px solid ${col}33` }}>
+              <Icon name={ic} size={18} color={col} strokeWidth={2.2} />
+            </div>
+            <div style={{ fontSize: 19, fontWeight: 800, fontFamily: T.display }}>{val}</div>
             <div style={{ color: T.sub, fontSize: 11.5 }}>{lab}</div>
           </Card>
         ))}
       </div>
 
       <Card style={{ marginBottom: 14, padding: 16 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, marginBottom: 14, letterSpacing: 0.3 }}>YOUR WEEK</div>
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 90 }}>
-          {week.map((v, i) => (
-            <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, height: "100%", justifyContent: "flex-end" }}>
-              <div style={{ width: "100%", borderRadius: 6, height: `${Math.max(4, (v / max) * 100)}%`,
-                background: i === week.length - 1 ? T.blue : "rgba(10,132,255,0.30)",
-                transition: "height 600ms cubic-bezier(.22,1,.36,1)" }} />
-              <div style={{ fontSize: 11, color: i === week.length - 1 ? T.blue : T.sub2, fontWeight: 700 }}>{days[i]}</div>
-            </div>
-          ))}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: T.sub, letterSpacing: 0.3 }}>YOUR WEEK</span>
+          <span style={{ fontSize: 11, color: T.sub2, fontWeight: 600 }}>points / day</span>
         </div>
+        {(() => {
+          const hi = Math.max(...week, 1);
+          const lo = Math.min(...week);
+          const span = Math.max(hi - lo, 1);
+          const fmt = (v) => (v >= 1000 ? (v / 1000).toFixed(1).replace(/\.0$/, "") + "k" : v);
+          return (
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 7, height: 108 }}>
+              {week.map((v, i) => {
+                const today = i === week.length - 1;
+                return (
+                  <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, height: "100%", justifyContent: "flex-end" }}>
+                    <div style={{ fontSize: 9.5, fontWeight: 700, color: today ? T.blue : T.sub2, fontFamily: T.display }}>{fmt(v)}</div>
+                    <div style={{ width: "100%", borderRadius: "7px 7px 3px 3px", height: `${22 + 78 * ((v - lo) / span)}%`,
+                      background: today ? "linear-gradient(180deg, #64D2FF, #0A84FF)" : "rgba(10,132,255,0.28)",
+                      boxShadow: today ? "0 4px 14px rgba(10,132,255,0.45)" : "none",
+                      transition: "height 700ms cubic-bezier(.22,1,.36,1)" }} />
+                    <div style={{ fontSize: 11, color: today ? T.blue : T.sub2, fontWeight: 700 }}>{days[i]}</div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
       </Card>
 
       <Card style={{ marginBottom: 100, padding: 14 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, marginBottom: 6, letterSpacing: 0.3 }}>ACHIEVEMENTS</div>
         {achievements.map((a) => (
-          <div key={a.name} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0", opacity: a.done ? 1 : 0.4 }}>
-            <span style={{ fontSize: 24 }}>{a.icon}</span>
+          <div key={a.name} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0", opacity: a.done ? 1 : 0.45 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+              background: a.done ? `${a.color}1f` : "rgba(255,255,255,0.04)", border: `1px solid ${a.done ? a.color + "3a" : T.border2}` }}>
+              <Icon name={a.icon} size={20} color={a.done ? a.color : T.sub2} strokeWidth={2.2} />
+            </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>{a.name}</div>
               <div style={{ color: T.sub, fontSize: 12 }}>{a.desc}</div>
             </div>
-            <span style={{ fontSize: 16 }}>{a.done ? "✅" : "🔒"}</span>
+            {a.done
+              ? <span style={{ width: 22, height: 22, borderRadius: 11, background: T.green, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="check" size={13} color="#fff" strokeWidth={3} /></span>
+              : <Icon name="lock" size={15} color={T.sub2} />}
           </div>
         ))}
       </Card>
@@ -1827,6 +2149,29 @@ export default function App() {
     const inner = (
       <div style={{ width: "100%", height: "100%", position: "relative",
         overflow: "hidden", background: T.bg, touchAction: "pan-y" }}>
+        <div style={{ position: "absolute", inset: 0, pointerEvents: "none",
+          background: IS_C
+            ? "radial-gradient(320px 240px at -12% 2%, rgba(70,103,255,0.24), transparent 64%), radial-gradient(300px 260px at 110% 10%, rgba(255,79,120,0.22), transparent 62%), radial-gradient(360px 280px at 48% 108%, rgba(19,201,132,0.16), transparent 64%)"
+            : IS_B
+            ? "radial-gradient(520px 300px at 0% -8%, rgba(255,224,113,0.18), transparent 58%), radial-gradient(440px 330px at 102% 18%, rgba(255,91,98,0.16), transparent 60%), radial-gradient(360px 280px at 50% 112%, rgba(104,240,255,0.12), transparent 62%)"
+            : "radial-gradient(520px 360px at 16% -8%, rgba(78,161,255,0.26), transparent 58%), radial-gradient(420px 340px at 96% 10%, rgba(200,117,255,0.18), transparent 60%), radial-gradient(360px 320px at 50% 106%, rgba(64,224,127,0.13), transparent 62%)",
+          animation: IS_B || IS_C ? "none" : "auroraDrift 8s ease-in-out infinite" }} />
+        {IS_B && (
+          <div style={{ position: "absolute", inset: 0, pointerEvents: "none", opacity: 0.16,
+            backgroundImage: "linear-gradient(rgba(255,224,113,0.7) 1px, transparent 1px), linear-gradient(90deg, rgba(104,240,255,0.45) 1px, transparent 1px)",
+            backgroundSize: "32px 32px", maskImage: "linear-gradient(to bottom, transparent, #000 18%, #000 72%, transparent)" }} />
+        )}
+        {IS_C && (
+          <div style={{ position: "absolute", inset: 0, pointerEvents: "none", opacity: 0.34,
+            backgroundImage: "radial-gradient(circle at 14px 14px, rgba(70,103,255,0.22) 0 3px, transparent 4px), linear-gradient(135deg, transparent 0 46%, rgba(255,255,255,0.58) 47% 53%, transparent 54%)",
+            backgroundSize: "42px 42px, 84px 84px" }} />
+        )}
+        <div style={{ position: "absolute", inset: 0, pointerEvents: "none",
+          background: IS_C
+            ? "linear-gradient(180deg, rgba(255,255,255,0.56), rgba(255,255,255,0.08) 42%, rgba(70,103,255,0.06) 100%)"
+            : IS_B
+            ? "linear-gradient(180deg, rgba(255,224,113,0.035), transparent 18%, rgba(0,0,0,0.24) 100%)"
+            : "linear-gradient(180deg, rgba(255,255,255,0.035), transparent 16%, rgba(0,0,0,0.16) 100%)" }} />
         {framed && (
           <div style={{ position: "absolute", top: 9, left: "50%", transform: "translateX(-50%)", width: 105, height: 30,
             background: "#000", borderRadius: 999, zIndex: 60 }} />
@@ -1848,13 +2193,22 @@ export default function App() {
 
     // Desktop: centered iPhone device mock with correct aspect ratio.
     return (
-      <div style={{ minHeight: "100vh", background: "radial-gradient(1000px 600px at 50% -100px, #16203a, #08080a 60%)",
+      <div style={{ minHeight: "100vh",
+        background: IS_C
+          ? "radial-gradient(900px 660px at 28% -80px, rgba(70,103,255,0.22), transparent 62%), radial-gradient(800px 560px at 82% 8%, rgba(255,79,120,0.18), transparent 60%), #F6F3FF"
+          : IS_B
+          ? "radial-gradient(1100px 720px at 35% -120px, rgba(255,224,113,0.18), transparent 62%), radial-gradient(900px 620px at 80% 10%, rgba(255,91,98,0.12), transparent 60%), #07080D"
+          : "radial-gradient(1100px 720px at 35% -120px, rgba(78,161,255,0.20), transparent 62%), radial-gradient(900px 620px at 80% 10%, rgba(200,117,255,0.13), transparent 60%), #05060A",
         display: "flex", alignItems: "center", justifyContent: "center", fontFamily: T.font, color: T.text,
         WebkitFontSmoothing: "antialiased", padding: 16, boxSizing: "border-box" }}>
         <FontImport />
         <div style={{ height: "min(844px, 96vh)", aspectRatio: "390 / 844", padding: 12, borderRadius: 56,
-          background: "linear-gradient(150deg, #3a3a3e, #1b1b1f 45%, #0c0c0e)",
-          boxShadow: "0 40px 100px rgba(0,0,0,0.85), inset 0 1px 2px rgba(255,255,255,0.18)" }}>
+          background: IS_C ? "linear-gradient(150deg, #FFFFFF, #DAD2FF 42%, #A9F2E4)" : IS_B ? "linear-gradient(150deg, #6B5B34, #1E1A19 42%, #08090D)" : "linear-gradient(150deg, #5A6070, #1B1D26 42%, #090A0F)",
+          boxShadow: IS_C
+            ? "0 44px 110px rgba(86,64,150,0.28), inset 0 1px 2px rgba(255,255,255,0.9)"
+            : IS_B
+            ? "0 44px 120px rgba(0,0,0,0.88), 0 0 80px rgba(255,91,98,0.10), inset 0 1px 2px rgba(255,255,255,0.24)"
+            : "0 44px 120px rgba(0,0,0,0.86), 0 0 80px rgba(78,161,255,0.12), inset 0 1px 2px rgba(255,255,255,0.24)" }}>
           <div style={{ width: "100%", height: "100%", borderRadius: 45, overflow: "hidden",
             border: "1px solid rgba(255,255,255,0.05)", background: T.bg }}>
             {inner}
@@ -1905,6 +2259,19 @@ export default function App() {
       </div>
 
       <div style={{ padding: "10px 18px 0", position: "relative" }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+          <div style={{ display: "inline-flex", padding: 3, borderRadius: 999, background: "rgba(255,255,255,0.055)",
+            border: `1px solid ${T.border2}`, gap: 3 }}>
+            {[["b", "B"], ["c", "C"], ["a", "A"]].map(([id, label]) => (
+              <button key={id} onClick={() => { window.location.search = id === "b" ? "" : `?ui=${id}`; }}
+                style={{ border: "none", borderRadius: 999, padding: "5px 10px", cursor: "pointer", fontFamily: T.font,
+                  fontSize: 11, fontWeight: 800, color: UI_VARIANT === id ? (IS_C ? "#fff" : "#0A0A0D") : T.sub,
+                  background: UI_VARIANT === id ? T.yellow : "transparent" }}>
+                UI {label}
+              </button>
+            ))}
+          </div>
+        </div>
         {duelOpp ? (
           <>
             <button onClick={() => setDuelOpp(null)}
@@ -2066,8 +2433,9 @@ export default function App() {
               background: "linear-gradient(160deg, #1a2a5c 0%, #0a0a1a 55%, #1a0a2e 100%)",
               border: `1px solid ${T.border}`, display: "flex", flexDirection: "column", alignItems: "center",
               justifyContent: "center", padding: "24px 18px", boxSizing: "border-box" }}>
-              <div style={{ position: "absolute", top: 16, left: 0, right: 0, textAlign: "center",
-                fontSize: 13, fontWeight: 700, fontFamily: T.display, letterSpacing: 1, color: "rgba(255,255,255,0.7)" }}>⚔️ SKILL DUELS</div>
+              <div style={{ position: "absolute", top: 16, left: 0, right: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                fontSize: 13, fontWeight: 700, fontFamily: T.display, letterSpacing: 1, color: "rgba(255,255,255,0.7)" }}>
+                <Icon name="swords" size={14} color="rgba(255,255,255,0.7)" /> SKILL DUELS</div>
               <Avatar id={avatar} size={78} ring />
               <div style={{ fontSize: 15, fontWeight: 700, fontFamily: T.display, marginTop: 10, color: "#fff" }}>{username}</div>
               <div style={{ fontSize: 40, fontWeight: 700, fontFamily: T.display, color: T.yellow, marginTop: 14, lineHeight: 1,
@@ -2080,7 +2448,7 @@ export default function App() {
                 </div>
                 <div style={{ width: 1, background: "rgba(255,255,255,0.15)" }} />
                 <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 18, fontWeight: 700, fontFamily: T.display, color: T.orange }}>🔥 {streak}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, fontFamily: T.display, color: T.orange, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}><Icon name="flame" size={15} color={T.orange} strokeWidth={2.3} /> {streak}</div>
                   <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)" }}>STREAK</div>
                 </div>
               </div>
@@ -2293,14 +2661,14 @@ export default function App() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
             background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: "14px 16px", marginBottom: 18 }}>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>🔊 Sounds</div>
+              <div style={{ fontSize: 15, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}><Icon name="sound" size={17} color="#fff" strokeWidth={2.1} /> Sounds</div>
               <div style={{ color: T.sub, fontSize: 12 }}>Sound effects in games</div>
             </div>
             <Switch on={soundOn} toggle={() => { const v = !soundOn; setSoundOn(v); Sound.on = v; if (v) Sound.beep(880, 0.08); }} />
           </div>
           <BigButton color={T.card2} style={{ boxShadow: "none", border: `1px solid ${T.border}`, marginBottom: 12 }}
-            onClick={() => { setPlayedGames({}); setBonusPts(0); setRewardClaimed(false); setSettingsOpen(false); showToast("🔄 Day reset (demo)"); }}>
-            🔄 Reset day (demo)
+            onClick={() => { setPlayedGames({}); setBonusPts(0); setRewardClaimed(false); setSettingsOpen(false); showToast("Day reset (demo)"); }}>
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}><Icon name="refresh" size={17} color="#fff" strokeWidth={2.2} /> Reset day (demo)</span>
           </BigButton>
           <div style={{ color: T.sub2, fontSize: 12, textAlign: "center" }}>Skill Duels · v3.0 prototype</div>
         </Sheet>
@@ -2308,18 +2676,28 @@ export default function App() {
 
       {/* Tab bar */}
       {!activeGame && !duelOpp && (
-        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, display: "flex", justifyContent: "space-around",
-          padding: "10px 0 22px", background: "rgba(22,22,24,0.72)", backdropFilter: "blur(24px)",
-          WebkitBackdropFilter: "blur(24px)", borderTop: `1px solid ${T.border}` }}>
+        <div style={{ position: "absolute", bottom: 0, left: 10, right: 10, display: "flex", justifyContent: "space-around",
+          padding: IS_C ? "9px 6px 16px" : IS_B ? "8px 6px 14px" : "9px 6px 15px",
+          background: IS_C ? "rgba(255,255,255,0.82)" : IS_B ? "rgba(17,16,14,0.88)" : "rgba(16,18,26,0.78)", backdropFilter: "blur(28px)",
+          WebkitBackdropFilter: "blur(28px)", border: `1px solid ${T.border}`, borderRadius: IS_C ? "30px 30px 0 0" : IS_B ? "16px 16px 0 0" : "24px 24px 0 0",
+          boxShadow: IS_C
+            ? "0 -12px 30px rgba(86,64,150,0.14), 0 -5px 0 rgba(70,103,255,0.06)"
+            : IS_B
+            ? "0 -14px 38px rgba(0,0,0,0.50), inset 0 1px 0 rgba(255,224,113,0.14)"
+            : "0 -16px 46px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.10)" }}>
           {tabs.map(([id, label, icon]) => (
             <button key={id} onClick={() => setTab(id)}
               style={{ background: "none", border: "none", cursor: "pointer", fontFamily: T.font,
-                color: tab === id ? T.blue : T.sub2, display: "flex", flexDirection: "column", alignItems: "center",
-                gap: 3, fontSize: 10, fontWeight: 600, width: 60 }}>
+                color: tab === id ? (IS_C ? T.purple : IS_B ? T.yellow : T.blue) : T.sub2, display: "flex", flexDirection: "column", alignItems: "center",
+                gap: 3, fontSize: 10, fontWeight: 700, width: 60 }}>
               <span style={{ display: "flex", alignItems: "center", justifyContent: "center",
-                background: tab === id ? "rgba(10,132,255,0.18)" : "transparent",
-                padding: "5px 13px", borderRadius: 999, transition: "background 250ms" }}>
-                <Icon name={icon} size={20} color={tab === id ? T.blue : "rgba(235,235,245,0.35)"} />
+                background: tab === id
+                  ? (IS_C ? "linear-gradient(135deg, rgba(70,103,255,0.16), rgba(255,79,120,0.14))" : IS_B ? "linear-gradient(180deg, rgba(255,224,113,0.28), rgba(255,91,98,0.10))" : "linear-gradient(180deg, rgba(78,161,255,0.24), rgba(78,161,255,0.10))")
+                  : "transparent",
+                padding: "6px 13px", borderRadius: IS_C ? 18 : IS_B ? 12 : 999, transition: "background 250ms, transform 250ms",
+                animation: tab === id ? "tabPop 320ms cubic-bezier(.22,1,.36,1)" : "none",
+                boxShadow: tab === id ? `0 8px 22px ${IS_C ? T.purple : IS_B ? T.yellow : T.blue}22, inset 0 1px 0 rgba(255,255,255,0.16)` : "none" }}>
+                <Icon name={icon} size={20} color={tab === id ? (IS_C ? T.purple : IS_B ? T.yellow : T.teal) : (IS_C ? "rgba(33,24,61,0.32)" : "rgba(239,242,255,0.35)")} />
               </span>
               {label}
             </button>
