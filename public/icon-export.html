@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Skill Duels — Icon Export</title>
+<style>
+  body { margin:0; background:#0c0c10; color:#fff; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; padding:32px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  p { color:#9aa0aa; margin:0 0 24px; font-size:13px; }
+  .row { display:flex; gap:32px; flex-wrap:wrap; align-items:flex-end; }
+  .cell { text-align:center; }
+  .cell img { display:block; border-radius:22%; box-shadow:0 12px 40px rgba(0,0,0,.5); }
+  .label { font-size:12px; color:#9aa0aa; margin-top:8px; }
+  .sizes { margin-top:36px; display:flex; gap:20px; align-items:center; }
+  .sizes img { border-radius:22%; }
+  button { margin-top:12px; background:#0A84FF; color:#fff; border:none; border-radius:10px; padding:9px 16px; font-size:13px; font-weight:700; cursor:pointer; }
+  a { color:#64D2FF; }
+</style>
+</head>
+<body>
+  <h1>Skill Duels — App Icon</h1>
+  <p>Click to download. Drop <b>icon.png</b> into the <b>public/</b> folder (it's the app's touch icon).
+     Use 1024 for the App Store, 512 for Android adaptive.</p>
+
+  <div class="row">
+    <div class="cell">
+      <img id="big" src="/icon.svg" width="256" height="256" />
+      <div class="label">1024 master (App Store)</div>
+      <button onclick="dl(1024,'icon-1024.png')">Download 1024</button>
+    </div>
+    <div class="cell">
+      <img src="/icon.svg" width="128" height="128" />
+      <div class="label">512 (Android)</div>
+      <button onclick="dl(512,'icon-512.png')">Download 512</button>
+    </div>
+    <div class="cell">
+      <img src="/icon.svg" width="90" height="90" />
+      <div class="label">180 (icon.png → public/)</div>
+      <button onclick="dl(180,'icon.png')">Download icon.png</button>
+    </div>
+  </div>
+
+  <div class="sizes">
+    <span style="color:#9aa0aa;font-size:12px">Legibility at small sizes:</span>
+    <img src="/icon.svg" width="80" height="80" />
+    <img src="/icon.svg" width="56" height="56" />
+    <img src="/icon.svg" width="40" height="40" />
+    <img src="/icon.svg" width="29" height="29" />
+  </div>
+
+  <script>
+    function dl(size, name){
+      const img = new Image();
+      img.onload = () => {
+        const c = document.createElement('canvas');
+        c.width = size; c.height = size;
+        const x = c.getContext('2d');
+        x.drawImage(img, 0, 0, size, size);
+        c.toBlob(b => {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(b);
+          a.download = name || ('icon-' + size + '.png');
+          a.click();
+        }, 'image/png');
+      };
+      img.src = '/icon.svg';
+    }
+  </script>
+</body>
+</html>

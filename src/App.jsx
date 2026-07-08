@@ -575,8 +575,6 @@ const FramedAvatar = ({ id, size = 64, frame }) => {
       <div style={{ position: "absolute", inset: 0, borderRadius: (size + pad * 2) * 0.3,
         background: `conic-gradient(from 0deg, ${c1}, ${c2}, ${c3}, ${c1})`,
         animation: "spinSlow 6s linear infinite" }} />
-      <div style={{ position: "absolute", inset: 0, borderRadius: (size + pad * 2) * 0.3,
-        boxShadow: `0 0 18px ${c3}88`, animation: "glowPulse 2.4s ease-in-out infinite" }} />
       <div style={{ position: "relative", zIndex: 2 }}><Avatar id={id} size={size} /></div>
     </div>
   );
@@ -677,12 +675,30 @@ function ReactionGame({ onFinish, rounds = 5 }) {
         ))}
       </div>
       <button onClick={tap}
-        style={{ width: "100%", height: 260, borderRadius: 28, border: "none", background: colors[phase], color: "#fff",
+        style={{ width: "100%", height: 260, borderRadius: 28, color: "#fff",
+          border: phase === "intro" ? `1px solid ${T.border}` : "none",
+          background: phase === "intro"
+            ? `radial-gradient(120% 90% at 50% 0%, ${T.blue}1c, transparent 60%), linear-gradient(160deg, ${T.card2}, ${T.card})`
+            : `linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0) 42%), ${colors[phase]}`,
           fontSize: 22, fontWeight: 700, fontFamily: T.display, cursor: "pointer", transition: "background 120ms",
-          WebkitTapHighlightColor: "transparent", boxShadow: phase === "go" ? `0 0 60px ${T.green}66` : "none" }}>
-        {labels[phase]}
-        {phase !== "intro" && phase !== "done" && (
-          <div style={{ fontSize: 13, fontWeight: 500, opacity: 0.7, marginTop: 6 }}>Round {Math.min(round + 1, rounds)}/{rounds}</div>
+          WebkitTapHighlightColor: "transparent",
+          boxShadow: phase === "go" ? `0 0 60px ${T.green}66` : phase === "intro" ? T.shadowSm : `0 12px 34px ${colors[phase]}44` }}>
+        {phase === "intro" ? (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+            <div style={{ width: 66, height: 66, borderRadius: 22, display: "flex", alignItems: "center", justifyContent: "center",
+              background: `${T.blue}22`, border: `1px solid ${T.blue}55` }}>
+              <Icon name="bolt" size={32} color={T.blue} />
+            </div>
+            <span>Tap to start</span>
+            <span style={{ fontSize: 13, fontWeight: 500, color: T.sub }}>Tap the instant it turns green</span>
+          </div>
+        ) : (
+          <>
+            {labels[phase]}
+            {phase !== "done" && (
+              <div style={{ fontSize: 13, fontWeight: 500, opacity: 0.75, marginTop: 6 }}>Round {Math.min(round + 1, rounds)}/{rounds}</div>
+            )}
+          </>
         )}
       </button>
       <div style={{ color: T.sub2, fontSize: 12, minHeight: 16 }}>{times.length > 0 && `Times: ${times.join(" · ")} ms`}</div>
@@ -856,7 +872,7 @@ function MathGame({ onFinish }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, alignItems: "center" }}>
       <div style={{ display: "flex", gap: 14 }}>
-        <Pill color={time <= 5 ? T.red : T.orange}>⏱ {Math.max(0, time)}"</Pill>
+        <Pill color={time <= 5 ? T.red : T.orange}>{Math.max(0, time)}"</Pill>
         <Pill color={T.green}>✓ {correct}</Pill>
       </div>
       <div style={{ fontSize: 42, fontWeight: 700, letterSpacing: -1, fontFamily: T.display, padding: "14px 0",
@@ -927,7 +943,7 @@ function TypingGame({ onFinish }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}>
       <div style={{ display: "flex", gap: 14 }}>
-        <Pill color={time <= 5 ? T.red : T.green}>⏱ {Math.max(0, time)}"</Pill>
+        <Pill color={time <= 5 ? T.red : T.green}>{Math.max(0, time)}"</Pill>
         <Pill color={T.teal}>✓ {count}</Pill>
       </div>
       <div style={{ fontSize: 34, fontWeight: 700, letterSpacing: 1, fontFamily: T.display }}>{word}</div>
@@ -1129,8 +1145,8 @@ function RewardOverlay({ onDone }) {
             <div style={{ color: "#fff", fontSize: 16, fontWeight: 700, animation: "floatUp 500ms ease-out 300ms backwards" }}>
               Streak bonus points!
             </div>
-            <div style={{ color: T.sub2, fontSize: 12, animation: "floatUp 500ms ease-out 550ms backwards" }}>
-              🔥 6 day streak — keep going!
+            <div style={{ color: T.sub2, fontSize: 12, display: "flex", alignItems: "center", gap: 5, animation: "floatUp 500ms ease-out 550ms backwards" }}>
+              <Icon name="flame" size={13} color={T.orange} strokeWidth={2.3} /> 6 day streak — keep going!
             </div>
           </>
         )}
@@ -1290,16 +1306,22 @@ function ShopScreen({ coins, owned, onBuy, onBuyCoins, onEquip, equipped }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
         {COIN_PACKS.map((pk) => (
           <div key={pk.id} className="pressable" onClick={() => onBuyCoins(pk)}
-            style={{ boxSizing: "border-box", background: T.card, border: `1px solid ${pk.tag ? T.yellow + "55" : T.border}`,
-              borderRadius: 18, padding: "16px 12px 14px", textAlign: "center", cursor: "pointer", position: "relative" }}>
+            style={{ boxSizing: "border-box", background: T.card, border: `1px solid ${pk.tag ? T.yellow + "55" : T.border2}`,
+              borderRadius: 20, padding: "18px 12px 14px", textAlign: "center", cursor: "pointer", position: "relative",
+              boxShadow: pk.tag ? `inset 0 1px 0 ${T.cardHi}, 0 6px 22px ${T.yellow}1e` : `inset 0 1px 0 ${T.cardHi}, ${T.shadowSm}` }}>
             {pk.tag && (
-              <div style={{ position: "absolute", top: 8, right: 8, whiteSpace: "nowrap",
-                background: T.yellow, color: "#1a1a1a", fontSize: 9, fontWeight: 700, borderRadius: 999, padding: "2px 8px" }}>{pk.tag}</div>
+              <div style={{ position: "absolute", top: -8, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap",
+                background: "linear-gradient(90deg, #FFE087, #FFB800)", color: "#3a2a00", fontSize: 9.5, fontWeight: 800,
+                borderRadius: 999, padding: "3px 10px", letterSpacing: 0.3, boxShadow: `0 3px 10px ${T.yellow}55` }}>{pk.tag}</div>
             )}
-            <Icon name="coin" size={26} color={T.yellow} />
-            <div style={{ fontSize: 18, fontWeight: 700, fontFamily: T.display, marginTop: 4 }}>{pk.coins.toLocaleString()}</div>
-            <div style={{ color: T.sub, fontSize: 12, marginBottom: 10 }}>coins</div>
-            <div style={{ background: T.green, color: "#fff", borderRadius: 10, padding: "7px 0", fontSize: 14, fontWeight: 700 }}>{pk.price}</div>
+            <div style={{ width: 46, height: 46, borderRadius: "50%", margin: "0 auto 8px", display: "flex", alignItems: "center", justifyContent: "center",
+              background: "linear-gradient(150deg, #FFE9A6, #FFB800)", boxShadow: `0 5px 16px ${T.yellow}55, inset 0 1px 1px rgba(255,255,255,0.6)` }}>
+              <Icon name="coin" size={24} color="#7A5200" strokeWidth={2.2} />
+            </div>
+            <div style={{ fontSize: 19, fontWeight: 700, fontFamily: T.display }}>{pk.coins.toLocaleString()}</div>
+            <div style={{ color: T.sub, fontSize: 12, marginBottom: 11 }}>coins</div>
+            <div style={{ background: `linear-gradient(180deg, rgba(255,255,255,0.22), transparent 45%), ${T.green}`, color: "#fff",
+              borderRadius: 11, padding: "8px 0", fontSize: 14, fontWeight: 700, fontFamily: T.display, boxShadow: `0 5px 16px ${T.green}44` }}>{pk.price}</div>
           </div>
         ))}
       </div>
@@ -1317,7 +1339,9 @@ function ShopScreen({ coins, owned, onBuy, onBuyCoins, onEquip, equipped }) {
           const rc = RARITY[it.rarity];
           return (
             <Card key={it.id} style={{ padding: 14, textAlign: "center", borderColor: `${rc}33` }}>
-              <div style={{ display: "flex", justifyContent: "center", marginBottom: 10, minHeight: 92, alignItems: "center" }}>
+              <div style={{ position: "relative", display: "flex", justifyContent: "center", marginBottom: 10, minHeight: 92, alignItems: "center" }}>
+                <div style={{ position: "absolute", width: 78, height: 78, borderRadius: "50%",
+                  background: `radial-gradient(closest-side, ${rc}${it.rarity === "legendary" ? "44" : it.rarity === "epic" ? "33" : "22"}, transparent 72%)`, pointerEvents: "none" }} />
                 {it.type === "frame"
                   ? <FramedAvatar id={"knight"} size={72} frame={it.frame} />
                   : <Avatar id={it.glyph} size={88} />}
@@ -1328,8 +1352,9 @@ function ShopScreen({ coins, owned, onBuy, onBuyCoins, onEquip, equipped }) {
                 <button className="pressable" onClick={() => onEquip(it.id)}
                   style={{ width: "100%", padding: "9px 0", borderRadius: 12, border: `1px solid ${isEquipped ? T.green : T.border}`,
                     background: isEquipped ? "rgba(48,209,88,0.15)" : T.card2, color: isEquipped ? T.green : "#fff",
-                    fontSize: 13, fontWeight: 700, fontFamily: T.font, cursor: "pointer" }}>
-                  {isEquipped ? "✓ Equipped" : "Equip"}
+                    fontSize: 13, fontWeight: 700, fontFamily: T.font, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+                  {isEquipped && <Icon name="check" size={13} color={T.green} strokeWidth={3} />}{isEquipped ? "Equipped" : "Equip"}
                 </button>
               ) : (
                 <button className="pressable" onClick={() => canAfford && onBuy(it)}
@@ -1583,9 +1608,9 @@ function TodayScreen({ playedGames, openGame, openPractice, onPractice, streak, 
           <Icon name="playAd" size={17} color={T.green} /> Watch ad · +1 challenge <span style={{ color: T.sub2, fontWeight: 600 }}>({adSlotsLeft} left)</span>
         </button>
       ) : (
-        <div style={{ width: "100%", boxSizing: "border-box", textAlign: "center", padding: "12px 0", marginBottom: 16,
-          borderRadius: 16, background: T.card, border: `1px solid ${T.border}`, color: T.sub2, fontSize: 13, fontWeight: 600 }}>
-          🚫 Daily duel limit reached — resets at midnight
+        <div style={{ width: "100%", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+          padding: "12px 0", marginBottom: 16, borderRadius: 16, background: T.card, border: `1px solid ${T.border}`, color: T.sub2, fontSize: 13, fontWeight: 600 }}>
+          <Icon name="lock" size={14} color={T.sub2} /> Daily duel limit reached — resets at midnight
         </div>
       )}
 
@@ -1736,7 +1761,7 @@ function LeaderboardScreen({ userEntry, onChallenge }) {
                       <Icon name="crown" size={20} color={mc} strokeWidth={2.3} />
                     </div>
                   )}
-                  <div style={{ borderRadius: (av + 6) / 2, padding: 3, background: T.bg,
+                  <div style={{ borderRadius: av * 0.28 + 5, padding: 2,
                     border: `2.5px solid ${mc}`, boxShadow: `0 0 18px ${mc}55` }}>
                     <Avatar id={r.avatar || "knight"} size={av} />
                   </div>
@@ -1980,7 +2005,7 @@ export default function App() {
   const finish = (raw, pts, label) => {
     const g = GAMES.find((x) => x.id === activeGame);
     if (practiceMode) {
-      showToast(`${g.emoji} Practice: ${label} (doesn't count)`);
+      showToast(`Practice: ${label} (doesn't count)`);
       setActiveGame(null);
       return;
     }
@@ -1990,9 +2015,9 @@ export default function App() {
       setCoins((c) => c + Math.round(pts / 10)); // earn coins from performance
       setElo((e) => e + delta);
       if (Object.keys(playedGames).length === 0) setStreak((s) => s + 1);
-      showToast(`${g.emoji} ${label} · +${pts} pts · ELO ${delta >= 0 ? "+" : ""}${delta}`);
+      showToast(`${label} · +${pts} pts · ELO ${delta >= 0 ? "+" : ""}${delta}`);
     } else {
-      showToast(`${g.emoji} Practice: ${label} (doesn't count)`);
+      showToast(`Practice: ${label} (doesn't count)`);
     }
     setActiveGame(null);
   };
@@ -2006,17 +2031,17 @@ export default function App() {
     setRewardAnim(false);
     setRewardClaimed(true);
     setBonusPts(50);
-    showToast("🎁 +50 bonus points!");
+    showToast("+50 bonus points!");
   };
 
   const duelDone = (won) => {
     setDuelRecord((r) => ({ w: r.w + (won ? 1 : 0), l: r.l + (won ? 0 : 1) }));
     if (duelStake > 0) {
       setChallengeDelta((d) => d + (won ? duelStake : -duelStake));
-      showToast(won ? `⚔️ Win! +${duelStake} pts stolen` : `⚔️ Loss! −${duelStake} pts`);
+      showToast(won ? `Win! +${duelStake} pts stolen` : `Loss! −${duelStake} pts`);
     } else {
       if (won) setDuelXP((x) => x + 40);
-      showToast(won ? "⚔️ Win! +40 pts" : "⚔️ Loss — ask for a rematch!");
+      showToast(won ? "Win! +40 pts" : "Loss — ask for a rematch!");
     }
     setDuelOpp(null);
     setDuelStake(0);
@@ -2031,7 +2056,7 @@ export default function App() {
   const onShareStory = () => {
     // Production: renders this card to an image and opens instagram-stories:// via a
     // native share plugin (Capacitor/RN). In this web preview we confirm the flow.
-    showToast("📸 Opens Instagram Story in the app (native share)");
+    showToast("Opens Instagram Story in the app (native share)");
   };
 
   const shareText = () => {
@@ -2067,7 +2092,7 @@ export default function App() {
 
   const openStake = (opp) => {
     if (challengesLeft <= 0) {
-      if (adCapReached) { showToast("🚫 Daily duel limit reached — come back tomorrow"); return; }
+      if (adCapReached) { showToast("Daily duel limit reached — come back tomorrow"); return; }
       setAdPromptFor(opp); return;                                    // out of tries → offer ad
     }
     if (onCooldown) { showToast(`⏳ Cooldown — wait ${cooldownLeft}s`); return; }
@@ -2084,24 +2109,24 @@ export default function App() {
 
   // Rewarded ad → grants one extra challenge (respects the daily cap).
   const watchAdDirect = () => {
-    if (adCapReached) { showToast("🚫 Daily duel limit reached — come back tomorrow"); return; }
+    if (adCapReached) { showToast("Daily duel limit reached — come back tomorrow"); return; }
     setAdPlaying(true);
     setTimeout(() => {
       setAdPlaying(false);
       setAdDuels((n) => n + 1);
-      showToast("🎬 +1 challenge unlocked!");
+      showToast("+1 challenge unlocked!");
     }, 2600);
   };
 
   const watchAdForDuel = () => {
     const opp = adPromptFor;
     setAdPromptFor(null);
-    if (adCapReached) { showToast("🚫 Daily duel limit reached — come back tomorrow"); return; }
+    if (adCapReached) { showToast("Daily duel limit reached — come back tomorrow"); return; }
     setAdPlaying(true);
     setTimeout(() => {
       setAdPlaying(false);
       setAdDuels((n) => n + 1);
-      showToast("🎬 +1 challenge unlocked!");
+      showToast("+1 challenge unlocked!");
       if (opp) { setLastChallenge(0); setStakeFor(opp); } // bypass cooldown for the earned try
     }, 2600);
   };
@@ -2112,13 +2137,13 @@ export default function App() {
     setOwned((o) => [...o, it.id]);
     setEquipped(it.id);
     Sound.win();
-    showToast(`✨ ${it.name} unlocked & equipped!`);
+    showToast(`${it.name} unlocked & equipped!`);
   };
   const buyCoins = (pk) => {
     // Placeholder for IAP — real build calls StoreKit / Play Billing.
     setCoins((c) => c + pk.coins);
     Sound.win();
-    showToast(`🪙 +${pk.coins.toLocaleString()} coins (demo purchase)`);
+    showToast(`+${pk.coins.toLocaleString()} coins (demo purchase)`);
   };
 
   // Avatars available to equip = all base avatars + any purchased avatar cosmetics.
@@ -2239,24 +2264,29 @@ export default function App() {
       <div style={{ position: "absolute", top: -130, left: 0, right: 0, height: 340, maxWidth: "100%",
         background: `radial-gradient(closest-side at 50% 50%, ${glow}20, transparent 72%)`, pointerEvents: "none", transition: "background 400ms" }} />
 
-      {/* iOS status bar */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 26px 0",
-        fontSize: 15, fontWeight: 700, fontVariantNumeric: "tabular-nums", position: "relative" }}>
-        <span>9:41</span>
-        <span style={{ display: "flex", gap: 7, alignItems: "center" }}>
-          <svg width="18" height="12" viewBox="0 0 18 12" fill="none">
-            <rect x="0" y="7" width="3" height="5" rx="1" fill="#fff" />
-            <rect x="5" y="4.5" width="3" height="7.5" rx="1" fill="#fff" />
-            <rect x="10" y="2" width="3" height="10" rx="1" fill="#fff" />
-            <rect x="15" y="0" width="3" height="12" rx="1" fill="#fff" opacity="0.35" />
-          </svg>
-          <svg width="26" height="12" viewBox="0 0 26 12" fill="none">
-            <rect x="0.5" y="0.5" width="21" height="11" rx="3.5" stroke="#fff" strokeOpacity="0.4" />
-            <rect x="2" y="2" width="15" height="8" rx="2" fill="#fff" />
-            <rect x="23" y="4" width="2.5" height="4" rx="1" fill="#fff" opacity="0.4" />
-          </svg>
-        </span>
-      </div>
+      {/* iOS status bar — only on the desktop device mock. On real phones we
+          defer to the OS status bar and just reserve safe-area space. */}
+      {framed ? (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 26px 0",
+          fontSize: 15, fontWeight: 700, fontVariantNumeric: "tabular-nums", position: "relative" }}>
+          <span>9:41</span>
+          <span style={{ display: "flex", gap: 7, alignItems: "center" }}>
+            <svg width="18" height="12" viewBox="0 0 18 12" fill="none">
+              <rect x="0" y="7" width="3" height="5" rx="1" fill="#fff" />
+              <rect x="5" y="4.5" width="3" height="7.5" rx="1" fill="#fff" />
+              <rect x="10" y="2" width="3" height="10" rx="1" fill="#fff" />
+              <rect x="15" y="0" width="3" height="12" rx="1" fill="#fff" opacity="0.35" />
+            </svg>
+            <svg width="26" height="12" viewBox="0 0 26 12" fill="none">
+              <rect x="0.5" y="0.5" width="21" height="11" rx="3.5" stroke="#fff" strokeOpacity="0.4" />
+              <rect x="2" y="2" width="15" height="8" rx="2" fill="#fff" />
+              <rect x="23" y="4" width="2.5" height="4" rx="1" fill="#fff" opacity="0.4" />
+            </svg>
+          </span>
+        </div>
+      ) : (
+        <div style={{ height: "max(12px, env(safe-area-inset-top))" }} />
+      )}
 
       <div style={{ padding: "10px 18px 0", position: "relative" }}>
         {duelOpp ? (
@@ -2344,7 +2374,7 @@ export default function App() {
                 borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
               <Avatar id={f.avatar} size={44} />
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 15 }}>{f.name} {f.friend && <span style={{ fontSize: 11, color: T.sub2 }}>👥</span>}</div>
+                <div style={{ fontWeight: 700, fontSize: 15, display: "flex", alignItems: "center", gap: 6 }}>{f.name} {f.friend && <Icon name="users" size={12} color={T.sub2} strokeWidth={2.1} />}</div>
                 <div style={{ color: T.sub, fontSize: 12 }}>~{f.skill} ms average · {f.pts} pts</div>
               </div>
               <Pill color={T.red}>Bet</Pill>
@@ -2416,31 +2446,58 @@ export default function App() {
 
           {/* 9:16 story card preview */}
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
-            <div style={{ width: 220, aspectRatio: "9 / 16", borderRadius: 20, overflow: "hidden", position: "relative",
-              background: "linear-gradient(160deg, #1a2a5c 0%, #0a0a1a 55%, #1a0a2e 100%)",
-              border: `1px solid ${T.border}`, display: "flex", flexDirection: "column", alignItems: "center",
-              justifyContent: "center", padding: "24px 18px", boxSizing: "border-box" }}>
-              <div style={{ position: "absolute", top: 16, left: 0, right: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                fontSize: 13, fontWeight: 700, fontFamily: T.display, letterSpacing: 1, color: "rgba(255,255,255,0.7)" }}>
-                <Icon name="swords" size={14} color="rgba(255,255,255,0.7)" /> SKILL DUELS</div>
-              <Avatar id={avatar} size={78} ring />
-              <div style={{ fontSize: 15, fontWeight: 700, fontFamily: T.display, marginTop: 10, color: "#fff" }}>{username}</div>
-              <div style={{ fontSize: 40, fontWeight: 700, fontFamily: T.display, color: T.yellow, marginTop: 14, lineHeight: 1,
-                textShadow: `0 0 24px ${T.yellow}66` }}>{seasonPts.toLocaleString()}</div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", letterSpacing: 1, marginTop: 2 }}>SEASON POINTS</div>
-              <div style={{ display: "flex", gap: 14, marginTop: 18 }}>
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 18, fontWeight: 700, fontFamily: T.display, color: "#fff" }}>#{shareRank}</div>
-                  <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)" }}>RANK</div>
-                </div>
-                <div style={{ width: 1, background: "rgba(255,255,255,0.15)" }} />
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 18, fontWeight: 700, fontFamily: T.display, color: T.orange, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}><Icon name="flame" size={15} color={T.orange} strokeWidth={2.3} /> {streak}</div>
-                  <div style={{ fontSize: 9, color: "rgba(255,255,255,0.5)" }}>STREAK</div>
-                </div>
+            <div style={{ width: 232, aspectRatio: "9 / 16", borderRadius: 22, overflow: "hidden", position: "relative",
+              background: "linear-gradient(165deg, #12245C 0%, #0A0A18 54%, #200A38 100%)",
+              border: `1px solid rgba(255,255,255,0.12)`, display: "flex", flexDirection: "column", alignItems: "center",
+              justifyContent: "center", padding: "18px 16px 34px", boxSizing: "border-box",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }}>
+              {/* ambient glows */}
+              <div style={{ position: "absolute", top: -40, left: -30, width: 200, height: 200, borderRadius: "50%",
+                background: "radial-gradient(closest-side, rgba(10,132,255,0.5), transparent)", pointerEvents: "none" }} />
+              <div style={{ position: "absolute", bottom: -50, right: -40, width: 220, height: 220, borderRadius: "50%",
+                background: "radial-gradient(closest-side, rgba(191,90,242,0.4), transparent)", pointerEvents: "none" }} />
+
+              {/* brand header */}
+              <div style={{ position: "absolute", top: 15, left: 0, right: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                fontSize: 12.5, fontWeight: 700, fontFamily: T.display, letterSpacing: 1.5, color: "rgba(255,255,255,0.85)" }}>
+                <Icon name="swords" size={14} color="#8FB6FF" /> SKILL DUELS</div>
+
+              {/* avatar + name */}
+              <div style={{ position: "relative", marginTop: 6 }}>
+                {equippedFrameId ? <FramedAvatar id={avatar} size={72} frame={equippedFrameId} /> : <Avatar id={avatar} size={72} ring />}
               </div>
-              <div style={{ position: "absolute", bottom: 16, left: 0, right: 0, textAlign: "center",
-                fontSize: 10, color: "rgba(255,255,255,0.5)" }}>skillduels.app</div>
+              <div style={{ fontSize: 15, fontWeight: 700, fontFamily: T.display, marginTop: 8, color: "#fff" }}>{username}</div>
+              <div style={{ marginTop: 6, display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(255,201,60,0.16)",
+                border: "1px solid rgba(255,201,60,0.5)", borderRadius: 999, padding: "3px 11px" }}>
+                <Icon name="crown" size={12} color="#FFC93C" />
+                <span style={{ fontSize: 11.5, fontWeight: 800, fontFamily: T.display, color: "#FFC93C", letterSpacing: 0.5 }}>#{shareRank} GLOBAL</span>
+              </div>
+
+              {/* points hero */}
+              <div style={{ fontSize: 42, fontWeight: 700, fontFamily: T.display, color: "#fff", marginTop: 14, lineHeight: 1,
+                textShadow: "0 0 26px rgba(120,180,255,0.7)" }}>{seasonPts.toLocaleString()}</div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.65)", letterSpacing: 2, marginTop: 3 }}>SEASON POINTS</div>
+
+              {/* today's result grid — Wordle-style flex */}
+              <div style={{ display: "flex", gap: 6, marginTop: 16 }}>
+                {GAMES.map((g) => {
+                  const done = !!playedGames[g.id];
+                  return (
+                    <div key={g.id} style={{ width: 34, height: 34, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center",
+                      background: done ? `linear-gradient(150deg, ${g.color}, ${g.color}bb)` : "rgba(255,255,255,0.06)",
+                      border: `1px solid ${done ? g.color : "rgba(255,255,255,0.12)"}`,
+                      boxShadow: done ? `0 4px 12px ${g.color}55` : "none" }}>
+                      <Icon name={g.icon} size={17} color={done ? "#fff" : "rgba(255,255,255,0.28)"} />
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 12, color: "rgba(255,255,255,0.85)", fontSize: 12, fontWeight: 700, fontFamily: T.display }}>
+                <Icon name="flame" size={14} color={T.orange} strokeWidth={2.4} /> {streak} day streak
+              </div>
+
+              <div style={{ position: "absolute", bottom: 14, left: 0, right: 0, textAlign: "center",
+                fontSize: 10, color: "rgba(255,255,255,0.55)", letterSpacing: 0.5 }}>skillduels.app</div>
             </div>
           </div>
 
