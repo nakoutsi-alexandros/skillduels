@@ -368,10 +368,12 @@ const TIERS = [
 const tierOf = (elo) => [...TIERS].reverse().find((t) => elo >= t.min);
 
 const GAMES = [
-  { id: "reaction", name: "Reaction Duel", icon: "bolt", emoji: "⚡️", desc: "5 rounds · average time", color: T.blue },
-  { id: "memory", name: "Memory Grid", icon: "grid", emoji: "🧠", desc: "Remember the sequence", color: T.purple },
-  { id: "math", name: "Mental Math", icon: "divide", emoji: "➗", desc: '30" · as many as you can', color: T.orange },
-  { id: "typing", name: "Speed Typing", icon: "keyboard", emoji: "⌨️", desc: '30" · fast typing', color: T.green },
+  { id: "draw",      name: "Duel Draw",   icon: "bolt",   emoji: "⚡️", desc: "React on green · hold on red", color: T.blue },
+  { id: "bullseye",  name: "Bullseye",    icon: "target", emoji: "🎯", desc: "Stop it dead-center",          color: T.teal },
+  { id: "numbers",   name: "Number Rush", icon: "grid",   emoji: "🔢", desc: "Tap 1→25 fast",                color: T.orange },
+  { id: "oddone",    name: "Odd One Out", icon: "target", emoji: "🎨", desc: "Spot the odd tile",            color: T.purple },
+  { id: "chimp",     name: "Chimp Test",  icon: "grid",   emoji: "🧠", desc: "Memorize the order",           color: T.green },
+  { id: "quickmath", name: "Quick Math",  icon: "divide", emoji: "➗", desc: "True or false, fast",          color: T.yellow },
 ];
 
 const BOTS = [
@@ -956,8 +958,393 @@ function TypingGame({ onFinish }) {
   );
 }
 
+// ================= Deterministic daily seed =================
+// Same challenge for everyone each day → fair leaderboard + duels + anti-cheat.
+const mulberry32 = (a) => () => {
+  a |= 0; a = (a + 0x6D2B79F5) | 0;
+  let t = Math.imul(a ^ (a >>> 15), 1 | a);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+const daySeed = (id) => {
+  const d = new Date();
+  let s = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  for (let i = 0; i < id.length; i++) s = (Math.imul(s, 31) + id.charCodeAt(i)) >>> 0;
+  return s >>> 0;
+};
+const shuffleSeeded = (arr, seed) => {
+  const rng = mulberry32(seed);
+  for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+  return arr;
+};
+
+const Dots = ({ n, done, color = T.blue }) => (
+  <div style={{ display: "flex", gap: 6 }}>
+    {Array.from({ length: n }).map((_, i) => (
+      <div key={i} style={{ width: 24, height: 5, borderRadius: 3, background: i < done ? color : "rgba(255,255,255,0.15)", transition: "background 200ms" }} />
+    ))}
+  </div>
+);
+const GameIntro = ({ icon, color, title, sub, onStart, cta = "Start" }) => (
+  <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}>
+    <div style={{ width: 84, height: 84, borderRadius: 26, display: "flex", alignItems: "center", justifyContent: "center",
+      background: `linear-gradient(135deg, ${color}2e, ${color}0d)`, border: `1px solid ${color}40` }}>
+      <Icon name={icon} size={40} color={color} strokeWidth={2.1} />
+    </div>
+    <div style={{ fontSize: 19, fontWeight: 700, fontFamily: T.display }}>{title}</div>
+    <div style={{ color: T.sub, textAlign: "center", fontSize: 14, maxWidth: 280, lineHeight: 1.4 }}>{sub}</div>
+    <BigButton color={color} onClick={onStart}>{cta}</BigButton>
+  </div>
+);
+
+// ================= GAME: Duel Draw (signature) — react on green, HOLD on red =================
+function DuelDrawGame({ onFinish, onBegin, rounds = 5 }) {
+  const [phase, setPhase] = useState("intro"); // intro|wait|green|red|early|badhit|between|done
+  const [shown, setShown] = useState(0);
+  const res = useRef([]);
+  const goAt = useRef(0);
+  const t1 = useRef(null), t2 = useRef(null);
+  useEffect(() => () => { clearTimeout(t1.current); clearTimeout(t2.current); }, []);
+
+  const commit = (ms) => {
+    res.current.push(ms);
+    setShown(res.current.length);
+    if (res.current.length >= rounds) {
+      const avg = Math.round(res.current.reduce((a, b) => a + b, 0) / res.current.length);
+      setPhase("done");
+      setTimeout(() => onFinish(avg, Math.max(100, 1000 - avg), `${avg} ms avg`), 700);
+    } else { setPhase("between"); t1.current = setTimeout(startRound, 720); }
+  };
+  const startRound = () => {
+    setPhase("wait");
+    t1.current = setTimeout(() => {
+      const red = Math.random() < 0.32;
+      goAt.current = performance.now();
+      if (red) {
+        Sound.beep(300, 0.08, "triangle"); setPhase("red");
+        t2.current = setTimeout(() => { Sound.beep(1050, 0.06); commit(210); }, 820); // held correctly
+      } else { Sound.beep(1250, 0.06); setPhase("green"); }
+    }, 1100 + Math.random() * 1800);
+  };
+  const tap = () => {
+    if (phase === "intro") return startRound();
+    if (phase === "done" || phase === "between") return;
+    if (phase === "wait") { clearTimeout(t1.current); Sound.lose(); setPhase("early"); t2.current = setTimeout(() => commit(680), 800); return; }
+    if (phase === "green") { Sound.beep(900, 0.07); commit(Math.round(performance.now() - goAt.current)); return; }
+    if (phase === "red") { clearTimeout(t2.current); Sound.lose(); setPhase("badhit"); t2.current = setTimeout(() => commit(620), 800); return; }
+  };
+  const bg = { wait: "#2A2118", green: T.green, red: T.red, early: T.orange, badhit: T.red, between: T.card2, done: T.blue }[phase];
+  const label = { wait: "Hold…", green: "FIRE!", red: "HOLD — fake!", early: "Too soon!", badhit: "That was a fake!", between: res.current.length ? `${res.current[res.current.length - 1]} ms` : "", done: "Done!" }[phase];
+  if (phase === "intro")
+    return <GameIntro icon="bolt" color={T.blue} title="Duel Draw" cta="Draw!"
+      sub="Wait for GREEN, then fire. If it flashes RED — hold, don't shoot. 5 rounds, fastest average wins." onStart={() => { onBegin?.(); startRound(); }} />;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, alignItems: "center" }}>
+      <Dots n={rounds} done={shown} />
+      <button onClick={tap}
+        style={{ width: "100%", height: 260, borderRadius: 28, border: "none", color: "#fff", cursor: "pointer",
+          background: `linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0) 42%), ${bg}`,
+          fontSize: 26, fontWeight: 800, fontFamily: T.display, transition: "background 90ms", WebkitTapHighlightColor: "transparent",
+          boxShadow: phase === "green" ? `0 0 60px ${T.green}77` : phase === "red" ? `0 0 60px ${T.red}77` : T.shadowSm }}>
+        {label}
+      </button>
+      <div style={{ color: T.sub2, fontSize: 12, minHeight: 16 }}>{res.current.length > 0 && `${res.current.join(" · ")} ms`}</div>
+    </div>
+  );
+}
+
+// ================= GAME: Bullseye — stop the sweeper in the zone =================
+function BullseyeGame({ onFinish, onBegin, rounds = 5 }) {
+  const [phase, setPhase] = useState("intro"); // intro|play|hit|done
+  const [pos, setPos] = useState(0);
+  const [round, setRound] = useState(0);
+  const [scores, setScores] = useState([]);
+  const [lastAcc, setLastAcc] = useState(null);
+  const posRef = useRef(0), dir = useRef(1), stopped = useRef(false), raf = useRef(null);
+  useEffect(() => () => cancelAnimationFrame(raf.current), []);
+
+  const startRun = (r) => {
+    setRound(r); stopped.current = false; posRef.current = 0; dir.current = 1; setPos(0); setLastAcc(null); setPhase("play");
+    const speed = 0.085 + r * 0.02; // %/ms — faster each round
+    let last = performance.now();
+    const loop = (t) => {
+      if (stopped.current) return;
+      const dt = t - last; last = t;
+      let p = posRef.current + dir.current * speed * dt;
+      if (p >= 100) { p = 100; dir.current = -1; } if (p <= 0) { p = 0; dir.current = 1; }
+      posRef.current = p; setPos(p);
+      raf.current = requestAnimationFrame(loop);
+    };
+    raf.current = requestAnimationFrame(loop);
+  };
+  const stop = () => {
+    if (phase !== "play" || stopped.current) return;
+    stopped.current = true; cancelAnimationFrame(raf.current);
+    const dist = Math.abs(posRef.current - 50);
+    const acc = Math.max(0, 1 - dist / 50);
+    acc > 0.9 ? Sound.win() : acc > 0.6 ? Sound.beep(700, 0.08) : Sound.beep(320, 0.1, "triangle");
+    setLastAcc(acc); setPhase("hit");
+    const sc = [...scores, acc]; setScores(sc);
+    setTimeout(() => {
+      if (r_next(round) >= rounds) {
+        const avg = sc.reduce((a, b) => a + b, 0) / sc.length;
+        const pts = Math.round(120 + avg * 880);
+        setPhase("done"); setTimeout(() => onFinish(Math.round(avg * 100), pts, `${Math.round(avg * 100)}% accuracy`), 100);
+      } else startRun(round + 1);
+    }, 750);
+  };
+  const r_next = (r) => r + 1;
+  const zone = Math.max(7, 18 - round * 2.2); // half-width %, shrinks
+  if (phase === "intro")
+    return <GameIntro icon="target" color={T.teal} title="Bullseye" cta="Start"
+      sub="A marker sweeps back and forth. Tap to stop it dead-center. The target shrinks and speeds up each round." onStart={() => { onBegin?.(); startRun(0); }} />;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18, alignItems: "center" }}>
+      <Dots n={rounds} done={scores.length} color={T.teal} />
+      <div style={{ width: "100%", height: 64, borderRadius: 18, position: "relative", overflow: "hidden",
+        background: T.card2, border: `1px solid ${T.border}` }}>
+        <div style={{ position: "absolute", top: 0, bottom: 0, left: `${50 - zone}%`, width: `${zone * 2}%`,
+          background: `linear-gradient(90deg, ${T.teal}22, ${T.teal}44, ${T.teal}22)`, borderLeft: `2px dashed ${T.teal}88`, borderRight: `2px dashed ${T.teal}88` }} />
+        <div style={{ position: "absolute", top: 0, bottom: 0, left: "50%", width: 2, background: `${T.teal}`, transform: "translateX(-50%)" }} />
+        <div style={{ position: "absolute", top: 6, bottom: 6, left: `${pos}%`, width: 8, borderRadius: 4, transform: "translateX(-50%)",
+          background: "#fff", boxShadow: "0 0 14px rgba(255,255,255,0.8)" }} />
+      </div>
+      <div style={{ minHeight: 22, fontSize: 15, fontWeight: 700, fontFamily: T.display,
+        color: lastAcc == null ? T.sub : lastAcc > 0.9 ? T.green : lastAcc > 0.6 ? T.teal : T.orange }}>
+        {lastAcc != null ? (lastAcc > 0.97 ? "PERFECT!" : `${Math.round(lastAcc * 100)}%`) : " "}
+      </div>
+      <BigButton color={T.teal} onClick={stop} style={{ opacity: phase === "play" ? 1 : 0.6 }}>STOP</BigButton>
+    </div>
+  );
+}
+
+// ================= GAME: Number Rush — tap 1→25 in order (Schulte) =================
+function NumberRushGame({ onFinish, onBegin }) {
+  const N = 25;
+  const [phase, setPhase] = useState("intro"); // intro|play|done
+  const [next, setNext] = useState(1);
+  const [wrong, setWrong] = useState(-1);
+  const [now, setNow] = useState(0);
+  const t0 = useRef(0);
+  const nums = useRef([]);
+  useEffect(() => { if (phase !== "play") return; const id = setInterval(() => setNow(performance.now()), 97); return () => clearInterval(id); }, [phase]);
+  const start = () => {
+    nums.current = shuffleSeeded(Array.from({ length: N }, (_, i) => i + 1), daySeed("numbers"));
+    setNext(1); t0.current = performance.now(); setNow(t0.current); setPhase("play");
+  };
+  const tap = (n) => {
+    if (phase !== "play") return;
+    if (n === next) {
+      Sound.beep(680 + next * 14, 0.045);
+      if (next === N) {
+        const el = (performance.now() - t0.current) / 1000;
+        const pts = Math.max(120, Math.min(1000, Math.round(1000 - (el - 9) * 42)));
+        setPhase("done"); setTimeout(() => onFinish(Math.round(el * 10) / 10, pts, `${el.toFixed(1)}s`), 500);
+      } else setNext(next + 1);
+    } else { Sound.beep(300, 0.09, "triangle"); setWrong(n); setTimeout(() => setWrong(-1), 220); }
+  };
+  if (phase === "intro")
+    return <GameIntro icon="grid" color={T.orange} title="Number Rush" cta="Start"
+      sub="Tap the numbers 1 to 25 in order, as fast as you can. Same grid for everyone today." onStart={() => { onBegin?.(); start(); }} />;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+        <Pill color={T.orange}>Next: {next}</Pill>
+        <Pill color={T.teal}>{((now - t0.current) / 1000).toFixed(1)}s</Pill>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 7, width: "100%", maxWidth: 320 }}>
+        {nums.current.map((n) => {
+          const found = n < next;
+          return (
+            <button key={n} onClick={() => tap(n)}
+              style={{ aspectRatio: "1", borderRadius: 12, fontSize: 18, fontWeight: 800, fontFamily: T.display, cursor: "pointer",
+                border: `1px solid ${wrong === n ? T.red : T.border}`, transition: "background 120ms, opacity 120ms",
+                background: wrong === n ? T.red : found ? "rgba(48,209,88,0.14)" : T.card2,
+                color: found ? T.green : "#fff", opacity: found ? 0.55 : 1, WebkitTapHighlightColor: "transparent" }}>
+              {found ? "" : n}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ================= GAME: Odd One Out — spot the different tile =================
+function OddOneGame({ onFinish, onBegin }) {
+  const [phase, setPhase] = useState("intro"); // intro|play|done
+  const [level, setLevel] = useState(1);
+  const [time, setTime] = useState(30);
+  const [correct, setCorrect] = useState(0);
+  const [flash, setFlash] = useState(-2); // -2 none, -1 wrong-any, idx correct
+  const rng = useRef(null);
+  const [board, setBoard] = useState(null);
+  const makeBoard = (lv) => {
+    const size = Math.min(6, 2 + Math.floor(lv / 2)); // 2..6
+    const cells = size * size;
+    const hue = Math.floor(rng.current() * 360);
+    const sat = 62, light = 56;
+    const delta = Math.max(4, 24 - lv * 1.6); // lightness diff shrinks
+    const odd = Math.floor(rng.current() * cells);
+    return { size, cells, base: `hsl(${hue} ${sat}% ${light}%)`, odd, oddColor: `hsl(${hue} ${sat}% ${light + delta}%)` };
+  };
+  const start = () => { rng.current = mulberry32(daySeed("oddone")); setLevel(1); setCorrect(0); setTime(30); setBoard(makeBoard(1)); setPhase("play"); };
+  useEffect(() => { if (phase !== "play") return; if (time <= 0) { finish(); return; } const id = setTimeout(() => setTime((t) => Math.round((t - 0.1) * 10) / 10), 100); return () => clearTimeout(id); }, [phase, time]);
+  const finish = () => { setPhase("done"); const pts = Math.max(120, Math.min(1000, correct * 55 + 100)); setTimeout(() => onFinish(correct, pts, `${correct} found`), 300); };
+  const tap = (i) => {
+    if (phase !== "play" || !board) return;
+    if (i === board.odd) { Sound.beep(720, 0.05); setFlash(i); const lv = level + 1; setCorrect((c) => c + 1); setLevel(lv); setTimeout(() => { setFlash(-2); setBoard(makeBoard(lv)); }, 130); }
+    else { Sound.beep(300, 0.09, "triangle"); setFlash(-1); setTime((t) => Math.max(0, t - 1.5)); setTimeout(() => setFlash(-2), 200); }
+  };
+  if (phase === "intro")
+    return <GameIntro icon="target" color={T.purple} title="Odd One Out" cta="Start"
+      sub="One tile is a slightly different shade. Tap it. It gets harder every time — 30 seconds, as many as you can." onStart={() => { onBegin?.(); start(); }} />;
+  if (!board) return null;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+        <Pill color={T.purple}>{correct} found</Pill>
+        <Pill color={time <= 5 ? T.red : T.teal}>{Math.max(0, time).toFixed(1)}s</Pill>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${board.size}, 1fr)`, gap: 6, width: "100%", maxWidth: 320,
+        outline: flash === -1 ? `2px solid ${T.red}` : "none", outlineOffset: 4, borderRadius: 12 }}>
+        {Array.from({ length: board.cells }).map((_, i) => (
+          <button key={i} onClick={() => tap(i)}
+            style={{ aspectRatio: "1", borderRadius: 10, border: "none", cursor: "pointer", WebkitTapHighlightColor: "transparent",
+              background: i === board.odd ? board.oddColor : board.base,
+              transform: flash === i ? "scale(0.9)" : "none", transition: "transform 120ms" }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ================= GAME: Chimp Test — memorize the order =================
+function ChimpGame({ onFinish, onBegin }) {
+  const SIZE = 5, CELLS = 25;
+  const [phase, setPhase] = useState("intro"); // intro|show|recall|done
+  const [n, setN] = useState(4);
+  const [lives, setLives] = useState(3);
+  const [best, setBest] = useState(0);
+  const [next, setNext] = useState(1);
+  const [flash, setFlash] = useState(-1);
+  const [placement, setPlacement] = useState([]); // [{cell, num}]
+  const rng = useRef(null);
+  const buildRound = (num) => {
+    const cells = shuffleSeeded(Array.from({ length: CELLS }, (_, i) => i), (daySeed("chimp") ^ (num * 2654435761)) >>> 0).slice(0, num);
+    setPlacement(cells.map((cell, idx) => ({ cell, num: idx + 1 })));
+    setNext(1); setPhase("show");
+    setTimeout(() => setPhase("recall"), 600 + num * 260);
+  };
+  const start = () => { rng.current = mulberry32(daySeed("chimp")); setN(4); setLives(3); setBest(0); buildRound(4); };
+  const cellNum = (cell) => placement.find((p) => p.cell === cell)?.num;
+  const tap = (cell) => {
+    if (phase !== "recall") return;
+    const num = cellNum(cell);
+    if (num === next) {
+      Sound.beep(660 + next * 30, 0.05); setFlash(cell); setTimeout(() => setFlash(-1), 120);
+      if (next === n) { const reached = n; setBest((b) => Math.max(b, reached)); const nn = n + 1; setN(nn); setTimeout(() => buildRound(nn), 350); }
+      else setNext(next + 1);
+    } else {
+      Sound.lose();
+      const lv = lives - 1; setLives(lv);
+      if (lv <= 0) { setPhase("done"); const reached = Math.max(best, next - 1 >= 3 ? next - 1 : best); const pts = Math.max(120, Math.min(1000, (Math.max(best, n - 1) - 3) * 140 + 140)); setTimeout(() => onFinish(Math.max(best, n - 1), pts, `reached ${Math.max(best, n - 1)}`), 300); }
+      else buildRound(n); // retry same length
+    }
+  };
+  if (phase === "intro")
+    return <GameIntro icon="grid" color={T.green} title="Chimp Test" cta="Start"
+      sub="Numbers appear, then vanish. Tap the cells in order from memory. One more each round — 3 lives." onStart={() => { onBegin?.(); start(); }} />;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+        <Pill color={T.green}>Length {n}</Pill>
+        <span style={{ display: "flex", gap: 3 }}>{[0, 1, 2].map((h) => (
+          <Icon key={h} name="heart" size={15} color={h < lives ? T.red : "rgba(255,255,255,0.18)"} strokeWidth={0} style={{ fill: h < lives ? T.red : "rgba(255,255,255,0.18)" }} />
+        ))}</span>
+      </div>
+      <div style={{ color: T.sub, fontSize: 13, minHeight: 16 }}>{phase === "show" ? "Memorize…" : "Repeat the order"}</div>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${SIZE}, 1fr)`, gap: 7, width: "100%", maxWidth: 320 }}>
+        {Array.from({ length: CELLS }).map((_, cell) => {
+          const num = cellNum(cell);
+          const filled = num != null;
+          return (
+            <button key={cell} onClick={() => tap(cell)}
+              style={{ aspectRatio: "1", borderRadius: 12, cursor: filled ? "pointer" : "default", WebkitTapHighlightColor: "transparent",
+                border: `1px solid ${filled ? T.green + "66" : "rgba(255,255,255,0.06)"}`,
+                background: flash === cell ? T.green : filled ? (phase === "show" ? "rgba(48,209,88,0.16)" : "rgba(48,209,88,0.10)") : "transparent",
+                color: "#fff", fontSize: 18, fontWeight: 800, fontFamily: T.display, transition: "background 100ms" }}>
+              {phase === "show" && filled ? num : ""}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ================= GAME: Quick Math — true or false, fast =================
+function QuickMathGame({ onFinish, onBegin }) {
+  const [phase, setPhase] = useState("intro"); // intro|play|done
+  const [time, setTime] = useState(30);
+  const [correct, setCorrect] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [q, setQ] = useState(null);
+  const [flash, setFlash] = useState(null); // 'ok'|'no'
+  const rng = useRef(null);
+  const gen = () => {
+    const r = rng.current;
+    const op = ["+", "−", "×"][Math.floor(r() * 3)];
+    let a, b, ans;
+    if (op === "×") { a = 2 + Math.floor(r() * 11); b = 2 + Math.floor(r() * 11); ans = a * b; }
+    else if (op === "−") { a = 10 + Math.floor(r() * 80); b = 1 + Math.floor(r() * a); ans = a - b; }
+    else { a = 5 + Math.floor(r() * 70); b = 5 + Math.floor(r() * 70); ans = a + b; }
+    const truth = r() < 0.5;
+    const shown = truth ? ans : ans + (r() < 0.5 ? -1 : 1) * (1 + Math.floor(r() * 6));
+    setQ({ text: `${a} ${op} ${b} = ${shown}`, truth });
+  };
+  const start = () => { rng.current = mulberry32(daySeed("quickmath")); setCorrect(0); setStreak(0); setTime(30); setPhase("play"); gen(); };
+  useEffect(() => { if (phase !== "play") return; if (time <= 0) { setPhase("done"); const pts = Math.max(120, Math.min(1000, correct * 45 + 100)); setTimeout(() => onFinish(correct, pts, `${correct} correct`), 300); return; } const id = setTimeout(() => setTime((t) => Math.round((t - 0.1) * 10) / 10), 100); return () => clearTimeout(id); }, [phase, time]);
+  const answer = (val) => {
+    if (phase !== "play" || !q) return;
+    if (val === q.truth) { Sound.beep(720, 0.05); setCorrect((c) => c + 1); setStreak((s) => s + 1); setFlash("ok"); }
+    else { Sound.beep(300, 0.09, "triangle"); setStreak(0); setTime((t) => Math.max(0, t - 2)); setFlash("no"); }
+    setTimeout(() => setFlash(null), 140); gen();
+  };
+  if (phase === "intro")
+    return <GameIntro icon="divide" color={T.yellow} title="Quick Math" cta="Start"
+      sub="Is the equation right or wrong? Tap ✓ or ✗ as fast as you can. 30 seconds — wrong answers cost time." onStart={() => { onBegin?.(); start(); }} />;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+        <Pill color={T.green}>{correct} correct</Pill>
+        {streak >= 3 && <Pill color={T.orange}>{streak} streak</Pill>}
+        <Pill color={time <= 5 ? T.red : T.teal}>{Math.max(0, time).toFixed(1)}s</Pill>
+      </div>
+      <div style={{ width: "100%", height: 150, borderRadius: 24, display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 40, fontWeight: 800, fontFamily: T.display, letterSpacing: 1,
+        background: flash === "ok" ? "rgba(48,209,88,0.16)" : flash === "no" ? "rgba(255,69,58,0.16)" : T.card2,
+        border: `1px solid ${flash === "ok" ? T.green : flash === "no" ? T.red : T.border}`, transition: "background 100ms" }}>
+        {q?.text}
+      </div>
+      <div style={{ display: "flex", gap: 12, width: "100%" }}>
+        <button onClick={() => answer(false)} className="pressable"
+          style={{ flex: 1, height: 76, borderRadius: 22, border: `1px solid ${T.red}66`, background: `${T.red}1f`, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Icon name="x" size={34} color={T.red} strokeWidth={3} />
+        </button>
+        <button onClick={() => answer(true)} className="pressable"
+          style={{ flex: 1, height: 76, borderRadius: 22, border: `1px solid ${T.green}66`, background: `${T.green}1f`, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Icon name="check" size={34} color={T.green} strokeWidth={3} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ================= 1v1 Duel =================
-function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "reaction" }) {
+function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "draw" }) {
   const [phase, setPhase] = useState("vs"); // vs | play | result
   const [count, setCount] = useState(3);
   const [myScore, setMyScore] = useState(null);   // {raw, pts, label}
@@ -975,10 +1362,12 @@ function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "r
   const oppScore = useRef((() => {
     const base = Math.max(150, Math.min(920, Math.round(1000 - opponent.skill + (Math.random() * 120 - 60))));
     const labels = {
-      reaction: `${Math.max(120, 1000 - base)} ms`,
-      memory: `sequence ${Math.round(base / 90)}`,
-      math: `${Math.round(base / 60)} correct`,
-      typing: `${Math.round(base / 75)} words`,
+      draw: `${Math.max(120, 1000 - base)} ms avg`,
+      bullseye: `${Math.round(base / 10)}% accuracy`,
+      numbers: `${(9 + (1000 - base) / 42).toFixed(1)}s`,
+      oddone: `${Math.round((base - 100) / 55)} found`,
+      chimp: `reached ${Math.max(4, Math.round((base - 140) / 140 + 3))}`,
+      quickmath: `${Math.round((base - 100) / 45)} correct`,
     };
     return { pts: base, label: labels[gameId] || `${base} pts` };
   })());
@@ -1021,10 +1410,12 @@ function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "r
     const on = (raw, pts, label) => finishPlay(raw, pts, label);
     return (
       <div>
-        {gameId === "reaction" && <ReactionGame rounds={3} onFinish={on} />}
-        {gameId === "memory" && <MemoryGame onFinish={on} />}
-        {gameId === "math" && <MathGame onFinish={on} />}
-        {gameId === "typing" && <TypingGame onFinish={on} />}
+        {gameId === "draw" && <DuelDrawGame rounds={3} onFinish={on} />}
+        {gameId === "bullseye" && <BullseyeGame rounds={3} onFinish={on} />}
+        {gameId === "numbers" && <NumberRushGame onFinish={on} />}
+        {gameId === "oddone" && <OddOneGame onFinish={on} />}
+        {gameId === "chimp" && <ChimpGame onFinish={on} />}
+        {gameId === "quickmath" && <QuickMathGame onFinish={on} />}
       </div>
     );
   }
@@ -1408,7 +1799,7 @@ function TodayScreen({ playedGames, openGame, openPractice, onPractice, streak, 
               </div>
               <div style={{ minWidth: 72, textAlign: "center", background: "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.26)",
                 borderRadius: 22, padding: "10px 9px" }}>
-                <div style={{ fontSize: 24, fontWeight: 900, fontFamily: T.display }}>{playedCount}/4</div>
+                <div style={{ fontSize: 24, fontWeight: 900, fontFamily: T.display }}>{playedCount}/{GAMES.length}</div>
                 <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.78 }}>DONE</div>
               </div>
             </div>
@@ -1532,8 +1923,8 @@ function TodayScreen({ playedGames, openGame, openPractice, onPractice, streak, 
           : "radial-gradient(220px 140px at 12% 12%, rgba(114,228,255,0.24), transparent 64%), linear-gradient(135deg, rgba(78,161,255,0.18), rgba(64,224,127,0.09) 68%), rgba(21,24,34,0.82)",
         borderColor: IS_C ? "rgba(70,103,255,0.14)" : "rgba(114,228,255,0.24)",
         boxShadow: IS_C ? "0 12px 0 rgba(70,103,255,0.08), 0 20px 44px rgba(86,64,150,0.14)" : "0 18px 46px rgba(78,161,255,0.14), inset 0 1px 0 rgba(255,255,255,0.16)" }}>
-        <Ring size={96} stroke={10} progress={playedCount / 4} color={T.green} color2={T.teal}>
-          <div style={{ fontSize: 22, fontWeight: 700, fontFamily: T.display }}>{playedCount}/4</div>
+        <Ring size={96} stroke={10} progress={playedCount / GAMES.length} color={T.green} color2={T.teal}>
+          <div style={{ fontSize: 22, fontWeight: 700, fontFamily: T.display }}>{playedCount}/{GAMES.length}</div>
         </Ring>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>Daily Duels</div>
@@ -1820,7 +2211,7 @@ function ProfileScreen({ elo, streak, playedGames, totalPts, duelRecord, openSet
   const days = ["S", "M", "T", "W", "T", "F", "S"];
   const achievements = [
     { icon: "bolt", color: T.blue, name: "First Duel", desc: "Play your first duel", done: played >= 1 },
-    { icon: "target", color: T.orange, name: "Full House", desc: "Play all 4 duels in one day", done: played >= 4 },
+    { icon: "target", color: T.orange, name: "Full House", desc: "Play all games in one day", done: played >= GAMES.length },
     { icon: "swords", color: T.red, name: "Duelist", desc: "Win a 1v1 duel", done: duelRecord.w >= 1 },
     { icon: "flame", color: T.orange, name: "Fire Week", desc: "7 day streak", done: streak >= 7 },
     { icon: "gem", color: T.purple, name: "Diamond Mind", desc: "Reach 1700 ELO", done: elo >= 1700 },
@@ -1933,6 +2324,7 @@ export default function App() {
   const [tab, setTab] = useState("today");
   const [activeGame, setActiveGame] = useState(null);
   const [practiceMode, setPracticeMode] = useState(false);
+  const [gameLive, setGameLive] = useState(false); // true once a scored daily game is in progress → no bailing
   const [playedGames, setPlayedGames] = useState({});
   const [elo, setElo] = useState(1385);
   const [streak, setStreak] = useState(6);
@@ -2299,10 +2691,16 @@ export default function App() {
           </>
         ) : activeGame ? (
           <>
-            <button onClick={() => setActiveGame(null)}
-              style={{ background: "none", border: "none", color: T.blue, fontSize: 16, fontWeight: 600, fontFamily: T.font, cursor: "pointer", padding: "6px 0 14px" }}>
-              ‹ Back
-            </button>
+            {(practiceMode || isReplay || !gameLive) ? (
+              <button onClick={() => setActiveGame(null)}
+                style={{ background: "none", border: "none", color: T.blue, fontSize: 16, fontWeight: 600, fontFamily: T.font, cursor: "pointer", padding: "6px 0 14px" }}>
+                ‹ Back
+              </button>
+            ) : (
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, color: T.sub2, fontSize: 13, fontWeight: 600, padding: "6px 0 14px" }}>
+                <Icon name="lock" size={13} color={T.sub2} /> Attempt in progress
+              </div>
+            )}
             <h1 style={{ fontSize: 24, fontWeight: 700, margin: "0 0 4px", fontFamily: T.display,
               display: "flex", alignItems: "center", gap: 10 }}>
               <Icon name={game.icon} size={23} color={game.color} /> {game.name}
@@ -2317,17 +2715,19 @@ export default function App() {
             ) : (
               <div style={{ color: T.sub, fontSize: 14, marginBottom: 18 }}>One attempt — make it count!</div>
             )}
-            {activeGame === "reaction" && <ReactionGame onFinish={finish} />}
-            {activeGame === "memory" && <MemoryGame onFinish={finish} />}
-            {activeGame === "math" && <MathGame onFinish={finish} />}
-            {activeGame === "typing" && <TypingGame onFinish={finish} />}
+            {activeGame === "draw" && <DuelDrawGame onFinish={finish} onBegin={() => setGameLive(true)} />}
+            {activeGame === "bullseye" && <BullseyeGame onFinish={finish} onBegin={() => setGameLive(true)} />}
+            {activeGame === "numbers" && <NumberRushGame onFinish={finish} onBegin={() => setGameLive(true)} />}
+            {activeGame === "oddone" && <OddOneGame onFinish={finish} onBegin={() => setGameLive(true)} />}
+            {activeGame === "chimp" && <ChimpGame onFinish={finish} onBegin={() => setGameLive(true)} />}
+            {activeGame === "quickmath" && <QuickMathGame onFinish={finish} onBegin={() => setGameLive(true)} />}
           </>
         ) : (
           <>
             {tab === "today" && (
               <TodayScreen playedGames={playedGames} streak={streak} totalPts={totalPts}
-                openGame={(id) => { setPracticeMode(false); setActiveGame(id); }}
-                openPractice={(id) => { setPracticeMode(true); setActiveGame(id); }}
+                openGame={(id) => { setGameLive(false); setPracticeMode(false); setActiveGame(id); }}
+                openPractice={(id) => { setGameLive(false); setPracticeMode(true); setActiveGame(id); }}
                 onPractice={() => setPracticeOpen(true)}
                 countdown={countdown} rewardClaimed={rewardClaimed} claimReward={claimReward}
                 onShare={() => { setShareOpen(true); setCopied(false); }} onDuel={() => setPickerOpen(true)}
@@ -2525,7 +2925,7 @@ export default function App() {
             Pick a game to warm up. Unlimited attempts — score isn't recorded.
           </div>
           {GAMES.map((g) => (
-            <div key={g.id} className="pressable" onClick={() => { setPracticeOpen(false); setPracticeMode(true); setActiveGame(g.id); }}
+            <div key={g.id} className="pressable" onClick={() => { setPracticeOpen(false); setGameLive(false); setPracticeMode(true); setActiveGame(g.id); }}
               style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 10px", borderRadius: 14, cursor: "pointer",
                 borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
               <div style={{ width: 46, height: 46, borderRadius: 15, display: "flex", alignItems: "center", justifyContent: "center",
