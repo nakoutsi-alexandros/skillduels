@@ -1167,12 +1167,12 @@ function NumberRushGame({ onFinish, onBegin }) {
         <Pill color={T.orange}>Next: {next}</Pill>
         <Pill color={T.teal}>{((now - t0.current) / 1000).toFixed(1)}s</Pill>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 7, width: "100%", maxWidth: 320 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 7, width: "100%", maxWidth: 320 }}>
         {nums.current.map((n) => {
           const found = n < next;
           return (
             <button key={n} onClick={() => tap(n)}
-              style={{ aspectRatio: "1", borderRadius: 12, fontSize: 18, fontWeight: 800, fontFamily: T.display, cursor: "pointer",
+              style={{ aspectRatio: "1", minWidth: 0, borderRadius: 12, fontSize: 18, fontWeight: 800, fontFamily: T.display, cursor: "pointer",
                 border: `1px solid ${wrong === n ? T.red : T.border}`, transition: "background 120ms, opacity 120ms",
                 background: wrong === n ? T.red : found ? "rgba(48,209,88,0.14)" : T.card2,
                 color: found ? T.green : "#fff", opacity: found ? 0.55 : 1, WebkitTapHighlightColor: "transparent" }}>
@@ -1221,11 +1221,11 @@ function OddOneGame({ onFinish, onBegin }) {
         <Pill color={T.purple}>{correct} found</Pill>
         <Pill color={time <= 5 ? T.red : T.teal}>{Math.max(0, time).toFixed(1)}s</Pill>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${board.size}, 1fr)`, gap: 6, width: "100%", maxWidth: 320,
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${board.size}, minmax(0, 1fr))`, gap: 6, width: "100%", maxWidth: 320,
         outline: flash === -1 ? `2px solid ${T.red}` : "none", outlineOffset: 4, borderRadius: 12 }}>
         {Array.from({ length: board.cells }).map((_, i) => (
           <button key={i} onClick={() => tap(i)}
-            style={{ aspectRatio: "1", borderRadius: 10, border: "none", cursor: "pointer", WebkitTapHighlightColor: "transparent",
+            style={{ aspectRatio: "1", minWidth: 0, borderRadius: 10, border: "none", cursor: "pointer", WebkitTapHighlightColor: "transparent",
               background: i === board.odd ? board.oddColor : board.base,
               transform: flash === i ? "scale(0.9)" : "none", transition: "transform 120ms" }} />
         ))}
@@ -1279,13 +1279,13 @@ function ChimpGame({ onFinish, onBegin }) {
         ))}</span>
       </div>
       <div style={{ color: T.sub, fontSize: 13, minHeight: 16 }}>{phase === "show" ? "Memorize…" : "Repeat the order"}</div>
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${SIZE}, 1fr)`, gap: 7, width: "100%", maxWidth: 320 }}>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${SIZE}, minmax(0, 1fr))`, gap: 7, width: "100%", maxWidth: 320 }}>
         {Array.from({ length: CELLS }).map((_, cell) => {
           const num = cellNum(cell);
           const filled = num != null;
           return (
             <button key={cell} onClick={() => tap(cell)}
-              style={{ aspectRatio: "1", borderRadius: 12, cursor: filled ? "pointer" : "default", WebkitTapHighlightColor: "transparent",
+              style={{ aspectRatio: "1", minWidth: 0, borderRadius: 12, cursor: filled ? "pointer" : "default", WebkitTapHighlightColor: "transparent",
                 border: `1px solid ${filled ? T.green + "66" : "rgba(255,255,255,0.06)"}`,
                 background: flash === cell ? T.green : filled ? (phase === "show" ? "rgba(48,209,88,0.16)" : "rgba(48,209,88,0.10)") : "transparent",
                 color: "#fff", fontSize: 18, fontWeight: 800, fontFamily: T.display, transition: "background 100ms" }}>
