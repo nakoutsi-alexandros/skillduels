@@ -1564,10 +1564,12 @@ function RewardOverlay({ onDone }) {
 // ================= Onboarding =================
 // ================= Scoring guide =================
 const SCORING = [
-  { icon: "bolt", color: T.blue, name: "Reaction", rule: "1000 − avg time (ms)", ex: "280ms → 720 pts" },
-  { icon: "grid", color: T.purple, name: "Memory", rule: "sequence length × 90", ex: "sequence 7 → 630 pts" },
-  { icon: "divide", color: T.orange, name: "Math", rule: "correct answers × 60", ex: "12 correct → 720 pts" },
-  { icon: "keyboard", color: T.green, name: "Typing", rule: "correct words × 75", ex: "9 words → 675 pts" },
+  { icon: "bolt",   color: T.blue,   name: "Duel Draw",   rule: "faster average time", ex: "300ms → 700 pts" },
+  { icon: "target", color: T.teal,   name: "Bullseye",    rule: "closer to center",    ex: "90% → 900 pts" },
+  { icon: "grid",   color: T.orange, name: "Number Rush", rule: "beat the clock",      ex: "18s → 630 pts" },
+  { icon: "target", color: T.purple, name: "Odd One Out", rule: "tiles you spot",      ex: "12 found → 760 pts" },
+  { icon: "grid",   color: T.green,  name: "Chimp Test",  rule: "longest sequence",    ex: "reach 8 → 840 pts" },
+  { icon: "divide", color: T.yellow, name: "Quick Math",  rule: "correct answers",     ex: "15 → 775 pts" },
 ];
 
 function PointsGuide() {
@@ -1589,7 +1591,7 @@ function PointsGuide() {
       ))}
       <div style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${T.border}`, borderRadius: 16,
         padding: "12px 14px", marginTop: 14, color: T.sub, fontSize: 12.5, lineHeight: 1.75 }}>
-        <b style={{ color: T.text }}>Max:</b> 1000 pts per game, 4000 + bonus daily<br />
+        <b style={{ color: T.text }}>Max:</b> 1000 pts per game, {GAMES.length * 1000} + bonus daily<br />
         <b style={{ color: T.text }}>ELO:</b> (pts − 480) ÷ 22 per duel · capped −15 to +28<br />
         <b style={{ color: T.text }}>Bonus:</b> +50 pts daily streak gift<br />
         <b style={{ color: T.text }}>Season Points:</b> one score for everything · ranking & rewards from it · resets monthly
@@ -1606,10 +1608,10 @@ function Onboarding({ onDone }) {
   const next = () => { Sound.beep(720, 0.06); setStep((x) => x + 1); };
 
   const GUIDE = [
-    { icon: "bolt", color: T.blue, title: "4 duels every day", sub: "New games each midnight — same for everyone" },
-    { icon: "flame", color: T.orange, title: "One attempt counts", sub: "After that, unlimited practice with no points" },
-    { icon: "trophy", color: T.yellow, title: "Climb the leaderboard", sub: "Daily leaderboard — global and friends" },
-    { icon: "shield", color: T.purple, title: "Rise through the league", sub: "Weekly: top 3 promote, bottom 3 relegate" },
+    { icon: "bolt", color: T.blue, title: `${GAMES.length} games a day`, sub: "Reflex & brain challenges — the same for everyone, fresh at midnight" },
+    { icon: "flame", color: T.orange, title: "One shot each", sub: "Your first try is scored. After that, practice all you want." },
+    { icon: "swords", color: T.red, title: "Duel anyone 1v1", sub: "Bet your points, beat their score, take them" },
+    { icon: "trophy", color: T.gold, title: "Climb the ranks", sub: "Daily leaderboard · monthly seasons · real rewards" },
   ];
 
   return (
@@ -1652,7 +1654,7 @@ function Onboarding({ onDone }) {
       {step === 1 && (
         <>
           <div style={{ fontSize: 24, fontWeight: 700, fontFamily: T.display, margin: "8px 0 4px" }}>How it works</div>
-          <div style={{ color: T.sub, fontSize: 14, textAlign: "center", marginBottom: 14 }}>The loop is simple:</div>
+          <div style={{ color: T.sub, fontSize: 14, textAlign: "center", marginBottom: 14, maxWidth: 300 }}>Quick daily games, everyone on the same challenges — race for the top.</div>
           <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
             {GUIDE.map((g, i) => (
               <div key={g.title} className="enter" style={{ display: "flex", alignItems: "center", gap: 14,
@@ -1675,12 +1677,35 @@ function Onboarding({ onDone }) {
 
       {step === 2 && (
         <>
-          <div style={{ fontSize: 24, fontWeight: 700, fontFamily: T.display, margin: "8px 0 4px" }}>How are points scored?</div>
-          <div style={{ color: T.sub, fontSize: 14, textAlign: "center", marginBottom: 10 }}>
-            Simple formulas — work out your own score:
+          <div style={{ fontSize: 24, fontWeight: 700, fontFamily: T.display, margin: "8px 0 4px" }}>The games</div>
+          <div style={{ color: T.sub, fontSize: 14, textAlign: "center", marginBottom: 14, maxWidth: 300 }}>
+            {GAMES.length} quick challenges — a fresh set every midnight.
           </div>
-          <PointsGuide />
-          <div style={{ height: 20 }} />
+          <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+            {GAMES.map((g, i) => (
+              <div key={g.id} className="enter" style={{ display: "flex", alignItems: "center", gap: 12,
+                background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: "10px 14px",
+                animationDelay: `${i * 60}ms` }}>
+                <div style={{ width: 40, height: 40, borderRadius: 13, display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0, background: `${g.color}1c`, border: `1px solid ${g.color}40` }}>
+                  <Icon name={g.icon} size={20} color={g.color} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 14.5, fontWeight: 700 }}>{g.name}</div>
+                  <div style={{ color: T.sub, fontSize: 12 }}>{g.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ width: "100%", background: "linear-gradient(180deg, rgba(255,214,10,0.08), transparent), " + T.card,
+            border: `1px solid ${T.border}`, borderRadius: 16, padding: "12px 15px", marginBottom: 18 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 700, marginBottom: 3 }}>
+              <Icon name="trophy" size={15} color={T.gold} /> Season Points
+            </div>
+            <div style={{ color: T.sub, fontSize: 12.5, lineHeight: 1.45 }}>
+              Every game scores up to 1,000. They add up to one number — your Season Points — that drives ranking, duels & rewards. Resets monthly.
+            </div>
+          </div>
           <BigButton color={T.green} onClick={() => onDone(name.trim() || "player", avatar)}>Start playing</BigButton>
         </>
       )}
