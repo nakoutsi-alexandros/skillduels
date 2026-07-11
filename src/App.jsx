@@ -76,6 +76,7 @@ const FontImport = () => (
       100% { background-position: 200% center; }
     }
     @keyframes spinSlow { to { transform: rotate(360deg); } }
+    @keyframes spriteRun { to { background-position-x: var(--sprite-end); } }
     @keyframes glowPulse {
       0%, 100% { opacity: 0.55; }
       50% { opacity: 1; }
@@ -413,18 +414,43 @@ const AV_ACCENT = {
   ghostwiz: "#8E8E93", crystalcactus: "#FF375F", bluebun: "#0A84FF", tomatocomet: "#FF453A", moongolem: "#64D2FF",
   sushidragon: "#FF9F0A", stormcloud: "#5E5CE6", mintwitch: "#30D158", sugarskull: "#FF375F", battlebot: "#0A84FF",
   ninjastar: "#BF5AF2", coralaxolotl: "#FF375F", eyeegg: "#FFD60A", pinkbot: "#FF2D9B", frostflask: "#64D2FF",
+  // animated sprite avatars (personality v3, 8-frame sheets in /public/avatars)
+  moss_snail_alchemist: "#30D158", origami_crane_mage: "#5E5CE6", sunflower_golem: "#FFD60A",
+  jellyfish_monk: "#64D2FF", mimic_bard: "#BF5AF2", candle_moth_keeper: "#FF9F0A",
+  koi_bowl_oracle: "#FF453A", radish_explorer: "#FF375F", stained_glass_owl: "#0A84FF",
+  volcano_turtle_astronomer: "#FF2D9B",
 };
 
+// ================= Animated sprite avatars =================
+// Each is an 8-frame horizontal sheet (128×128 per frame) served from /public/avatars.
+// Rendered by CSS steps() animation in the Avatar component below.
+const SPRITE_FRAMES = 8, SPRITE_FRAME_MS = 120;
+const SPRITE_AVATARS = Object.fromEntries(
+  [
+    "moss_snail_alchemist", "origami_crane_mage", "sunflower_golem", "jellyfish_monk",
+    "mimic_bard", "candle_moth_keeper", "koi_bowl_oracle", "radish_explorer",
+    "stained_glass_owl", "volcano_turtle_astronomer",
+  ].map((key) => [key, { src: `${import.meta.env.BASE_URL}avatars/${key}.png`, frames: SPRITE_FRAMES, frameMs: SPRITE_FRAME_MS }])
+);
+
 const Avatar = ({ id, size = 44, ring = false, bare = true }) => {
-  const key = AVATAR_IMG[id] ? id : "dragon";
+  const sprite = SPRITE_AVATARS[id];
+  const key = sprite ? id : (AVATAR_IMG[id] ? id : "dragon");
   const accent = AV_ACCENT[key] || "#0A84FF";
+  const inner = Math.round(size * (bare ? 1 : 0.94));
   return (
     <div style={{ width: size, height: size, maxWidth: "100%", borderRadius: size * 0.28, flexShrink: 0,
       display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", boxSizing: "border-box",
       background: bare ? "transparent" : `linear-gradient(140deg, ${accent}22, ${accent}08)`,
       border: bare ? "none" : `1px solid ${accent}33`, boxShadow: ring && !bare ? `0 0 18px ${accent}55` : "none" }}>
-      <img src={AVATAR_IMG[key]} alt="" width={Math.round(size * (bare ? 1 : 0.94))} height={Math.round(size * (bare ? 1 : 0.94))}
-        style={{ maxWidth: bare ? "100%" : "94%", maxHeight: bare ? "100%" : "94%", imageRendering: "auto", objectFit: "contain" }} />
+      {sprite ? (
+        <div style={{ width: inner, height: inner, backgroundImage: `url(${sprite.src})`, backgroundRepeat: "no-repeat",
+          backgroundSize: `${sprite.frames * inner}px ${inner}px`, "--sprite-end": `-${sprite.frames * inner}px`,
+          animation: `spriteRun ${(sprite.frames * sprite.frameMs) / 1000}s steps(${sprite.frames}) infinite`, imageRendering: "auto" }} />
+      ) : (
+        <img src={AVATAR_IMG[key]} alt="" width={inner} height={inner}
+          style={{ maxWidth: bare ? "100%" : "94%", maxHeight: bare ? "100%" : "94%", imageRendering: "auto", objectFit: "contain" }} />
+      )}
     </div>
   );
 };
@@ -621,6 +647,17 @@ const SHOP_ITEMS = [
   { id: "av_galaxyslime", type: "avatar", name: "Galaxy Slime", cost: 1300, glyph: "galaxyslime",   rarity: "legendary" },
   { id: "av_sushidragon", type: "avatar", name: "Sushi Dragon", cost: 1300, glyph: "sushidragon",   rarity: "legendary" },
   { id: "av_eyeegg",      type: "avatar", name: "Oracle Egg",   cost: 1500, glyph: "eyeegg",        rarity: "legendary" },
+  // Animated flagship avatars (personality v3, 8-frame sprites)
+  { id: "av_mossalch",    type: "avatar", name: "Moss Alchemist", cost: 1600, glyph: "moss_snail_alchemist",       rarity: "legendary" },
+  { id: "av_origami",     type: "avatar", name: "Origami Mage",   cost: 1700, glyph: "origami_crane_mage",         rarity: "legendary" },
+  { id: "av_sungolem",    type: "avatar", name: "Sunflower Golem",cost: 1800, glyph: "sunflower_golem",            rarity: "legendary" },
+  { id: "av_jellymonk",   type: "avatar", name: "Jellyfish Monk", cost: 1900, glyph: "jellyfish_monk",             rarity: "legendary" },
+  { id: "av_mimicbard",   type: "avatar", name: "Mimic Bard",     cost: 2000, glyph: "mimic_bard",                 rarity: "legendary" },
+  { id: "av_candlemoth",  type: "avatar", name: "Candle Keeper",  cost: 2100, glyph: "candle_moth_keeper",         rarity: "legendary" },
+  { id: "av_koioracle",   type: "avatar", name: "Koi Oracle",     cost: 2200, glyph: "koi_bowl_oracle",            rarity: "legendary" },
+  { id: "av_radish",      type: "avatar", name: "Radish Explorer", cost: 2300, glyph: "radish_explorer",           rarity: "legendary" },
+  { id: "av_glassowl",    type: "avatar", name: "Glass Owl",      cost: 2400, glyph: "stained_glass_owl",          rarity: "legendary" },
+  { id: "av_volcano",     type: "avatar", name: "Volcano Sage",   cost: 2500, glyph: "volcano_turtle_astronomer",  rarity: "legendary" },
   { id: "fr_ocean",   type: "frame",  name: "Tidal",       cost: 1200, frame: "ocean",  rarity: "epic" },
   { id: "fr_aurora",  type: "frame",  name: "Aurora",      cost: 1600, frame: "aurora", rarity: "epic" },
   { id: "fr_magma",   type: "frame",  name: "Magma",       cost: 2000, frame: "magma",  rarity: "legendary" },
