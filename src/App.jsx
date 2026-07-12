@@ -1845,6 +1845,8 @@ function ShopScreen({ coins, owned, onBuy, onBuyCoins, onEquip, equipped }) {
 // ================= Screens =================
 function TodayScreen({ playedGames, openGame, openPractice, onPractice, streak, totalPts, countdown, rewardClaimed, claimReward, onShare, onDuel, onHelp, balance, challengesLeft, onWatchAd, canWatchAd, adSlotsLeft }) {
   const playedCount = Object.keys(playedGames).length;
+  const gamesRef = useRef(null);
+  const scrollToGames = () => gamesRef.current && gamesRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
   if (IS_C) {
     const nextGame = GAMES.find((g) => !playedGames[g.id]) || GAMES[0];
     return (
@@ -2013,81 +2015,21 @@ function TodayScreen({ playedGames, openGame, openPractice, onPractice, streak, 
         </div>
       </Card>
 
-      {/* Daily reward */}
-      <Card delay={70} onClick={rewardClaimed ? undefined : claimReward}
-        style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14, padding: 14,
-          cursor: rewardClaimed ? "default" : "pointer",
-          border: rewardClaimed ? `1px solid ${T.border}` : `1px solid ${T.yellow}55`,
-          background: rewardClaimed ? T.card : "linear-gradient(90deg, rgba(255,214,10,0.10), rgba(28,28,30,1) 60%)" }}>
-        <div style={{ width: 50, height: 50, borderRadius: 17, display: "flex", alignItems: "center", justifyContent: "center",
-          flexShrink: 0, background: "rgba(255,214,10,0.13)", border: "1px solid rgba(255,214,10,0.35)" }}>
-          <Icon name={rewardClaimed ? "check" : "gift"} size={24} color={rewardClaimed ? T.green : T.yellow} />
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>{rewardClaimed ? "Claimed!" : "Daily streak gift"}</div>
-          <div style={{ color: T.sub, fontSize: 12 }}>{rewardClaimed ? "+50 bonus points added" : "Tap for +50 bonus points"}</div>
-        </div>
-        {!rewardClaimed && <Pill color={T.yellow}>Open it</Pill>}
-      </Card>
+      {/* Primary CTA — jump straight to today's games */}
+      <BigButton color={T.green} style={{ marginBottom: 18 }} onClick={scrollToGames}>
+        <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 9 }}>
+          <Icon name="playAd" size={19} color="#fff" />
+          {playedCount >= GAMES.length ? "All done — see your scores" : playedCount > 0 ? "Keep playing" : "Play today's duels"}
+        </span>
+      </BigButton>
 
-      {/* Practice entry */}
-      <Card delay={100} onClick={onPractice}
-        style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14, padding: 14, cursor: "pointer",
-          borderColor: `${T.green}44` }}>
-        <div style={{ width: 50, height: 50, borderRadius: 17, display: "flex", alignItems: "center", justifyContent: "center",
-          flexShrink: 0, background: "rgba(48,209,88,0.12)", border: `1px solid ${T.green}40` }}>
-          <Icon name="dumbbell" size={24} color={T.green} strokeWidth={2.1} />
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>Practice</div>
-          <div style={{ color: T.sub, fontSize: 12 }}>Train unlimited — without spending your attempt</div>
-        </div>
-        <Pill color={T.green}>Warm up ›</Pill>
-      </Card>
-
-      {/* Ranked challenge entry */}
-      <Card delay={130} onClick={onDuel}
-        style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16, padding: 14, cursor: "pointer",
-          background: IS_C
-            ? "radial-gradient(170px 110px at 0% 0%, rgba(255,79,120,0.18), transparent 64%), linear-gradient(135deg, rgba(255,255,255,0.96), rgba(255,242,248,0.86))"
-            : "radial-gradient(180px 110px at 0% 0%, rgba(255,69,58,0.24), transparent 64%), linear-gradient(135deg, rgba(255,69,58,0.14), rgba(200,117,255,0.08) 70%), rgba(21,24,34,0.84)",
-          border: `1px solid ${T.red}44` }}>
-        <div style={{ width: 50, height: 50, borderRadius: 17, display: "flex", alignItems: "center", justifyContent: "center",
-          flexShrink: 0, background: "rgba(255,69,58,0.14)", border: "1px solid rgba(255,69,58,0.4)" }}>
-          <Icon name="swords" size={24} color={T.red} />
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>Ranked Challenge</div>
-          <div style={{ color: T.sub, fontSize: 12 }}>Bet points · beat them to steal · lose and pay up</div>
-        </div>
-        <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, fontFamily: T.display, color: challengesLeft > 0 ? T.green : T.sub2 }}>{challengesLeft}</div>
-          <div style={{ color: T.sub2, fontSize: 10 }}>{challengesLeft === 1 ? "try left" : "tries left"}</div>
-        </div>
-      </Card>
-
-      {/* Watch-ad for extra challenge — respects daily cap */}
-      {canWatchAd ? (
-        <button className="pressable" onClick={onWatchAd}
-          style={{ width: "100%", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-            padding: "12px 0", marginBottom: 16, borderRadius: 16, cursor: "pointer",
-            background: "rgba(48,209,88,0.12)", border: `1px solid ${T.green}44`, color: T.green,
-            fontSize: 14, fontWeight: 700, fontFamily: T.font }}>
-          <Icon name="playAd" size={17} color={T.green} /> Watch ad · +1 challenge <span style={{ color: T.sub2, fontWeight: 600 }}>({adSlotsLeft} left)</span>
-        </button>
-      ) : (
-        <div style={{ width: "100%", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-          padding: "12px 0", marginBottom: 16, borderRadius: 16, background: T.card, border: `1px solid ${T.border}`, color: T.sub2, fontSize: 13, fontWeight: 600 }}>
-          <Icon name="lock" size={14} color={T.sub2} /> Daily duel limit reached — resets at midnight
-        </div>
-      )}
-
-      <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, margin: "0 4px 10px", letterSpacing: 0.3 }}>TODAY'S DUELS</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+      {/* Games first — the reason you opened the app */}
+      <div ref={gamesRef} style={{ scrollMarginTop: 12, fontSize: 13, fontWeight: 700, color: T.sub, margin: "0 4px 10px", letterSpacing: 0.3 }}>TODAY'S DUELS</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
         {GAMES.map((g, gi) => {
           const res = playedGames[g.id];
           return (
-            <Card key={g.id} delay={170 + gi * 60} onClick={() => openGame(g.id)}
+            <Card key={g.id} delay={120 + gi * 55} onClick={() => openGame(g.id)}
               style={{ padding: 16, cursor: "pointer", borderColor: res ? `${g.color}55` : T.border }}>
               <div style={{ width: 52, height: 52, borderRadius: 17, display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 26, marginBottom: 10, background: `linear-gradient(135deg, ${g.color}30, ${g.color}0d)`,
@@ -2106,6 +2048,58 @@ function TodayScreen({ playedGames, openGame, openPractice, onPractice, streak, 
           );
         })}
       </div>
+
+      {/* Secondary actions — gathered into one compact row */}
+      <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, margin: "0 4px 10px", letterSpacing: 0.3 }}>MORE</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+        <button className="pressable" onClick={rewardClaimed ? undefined : claimReward}
+          style={{ textAlign: "left", cursor: rewardClaimed ? "default" : "pointer", padding: "12px 12px 13px", borderRadius: 18,
+            background: rewardClaimed ? T.card : "linear-gradient(160deg, rgba(255,214,10,0.14), rgba(28,28,30,1) 72%)",
+            border: rewardClaimed ? `1px solid ${T.border}` : `1px solid ${T.yellow}55` }}>
+          <div style={{ width: 38, height: 38, borderRadius: 13, display: "flex", alignItems: "center", justifyContent: "center",
+            background: "rgba(255,214,10,0.13)", border: "1px solid rgba(255,214,10,0.3)", marginBottom: 9 }}>
+            <Icon name={rewardClaimed ? "check" : "gift"} size={20} color={rewardClaimed ? T.green : T.yellow} />
+          </div>
+          <div style={{ fontSize: 13.5, fontWeight: 700 }}>{rewardClaimed ? "Claimed" : "Gift"}</div>
+          <div style={{ color: T.sub2, fontSize: 11 }}>+50 pts</div>
+        </button>
+        <button className="pressable" onClick={onPractice}
+          style={{ textAlign: "left", cursor: "pointer", padding: "12px 12px 13px", borderRadius: 18,
+            background: T.card, border: `1px solid ${T.green}44` }}>
+          <div style={{ width: 38, height: 38, borderRadius: 13, display: "flex", alignItems: "center", justifyContent: "center",
+            background: "rgba(48,209,88,0.12)", border: `1px solid ${T.green}40`, marginBottom: 9 }}>
+            <Icon name="dumbbell" size={20} color={T.green} strokeWidth={2.1} />
+          </div>
+          <div style={{ fontSize: 13.5, fontWeight: 700 }}>Practice</div>
+          <div style={{ color: T.sub2, fontSize: 11 }}>free runs</div>
+        </button>
+        <button className="pressable" onClick={onDuel}
+          style={{ textAlign: "left", cursor: "pointer", padding: "12px 12px 13px", borderRadius: 18,
+            background: T.card, border: `1px solid ${T.red}44` }}>
+          <div style={{ width: 38, height: 38, borderRadius: 13, display: "flex", alignItems: "center", justifyContent: "center",
+            background: "rgba(255,69,58,0.14)", border: "1px solid rgba(255,69,58,0.36)", marginBottom: 9 }}>
+            <Icon name="swords" size={20} color={T.red} />
+          </div>
+          <div style={{ fontSize: 13.5, fontWeight: 700 }}>Ranked</div>
+          <div style={{ color: challengesLeft > 0 ? T.green : T.sub2, fontSize: 11, fontWeight: 700 }}>{challengesLeft} {challengesLeft === 1 ? "try" : "tries"}</div>
+        </button>
+      </div>
+
+      {/* Watch-ad for extra challenge — respects daily cap */}
+      {canWatchAd ? (
+        <button className="pressable" onClick={onWatchAd}
+          style={{ width: "100%", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            padding: "12px 0", marginBottom: 16, borderRadius: 16, cursor: "pointer",
+            background: "rgba(48,209,88,0.12)", border: `1px solid ${T.green}44`, color: T.green,
+            fontSize: 14, fontWeight: 700, fontFamily: T.font }}>
+          <Icon name="playAd" size={17} color={T.green} /> Watch ad · +1 challenge <span style={{ color: T.sub2, fontWeight: 600 }}>({adSlotsLeft} left)</span>
+        </button>
+      ) : (
+        <div style={{ width: "100%", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+          padding: "12px 0", marginBottom: 16, borderRadius: 16, background: T.card, border: `1px solid ${T.border}`, color: T.sub2, fontSize: 13, fontWeight: 600 }}>
+          <Icon name="lock" size={14} color={T.sub2} /> Daily duel limit reached — resets at midnight
+        </div>
+      )}
 
       {playedCount > 0 && (
         <BigButton color={T.card2} style={{ boxShadow: "none", border: `1px solid ${T.border}`, marginBottom: 16 }} onClick={onShare}>
