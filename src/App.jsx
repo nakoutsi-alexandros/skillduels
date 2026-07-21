@@ -1,136 +1,84 @@
 import { useState, useEffect, useRef } from "react";
 
-// ================= iOS design tokens =================
-const UI_PARAM = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("ui") : null;
-const UI_VARIANT = UI_PARAM === "a" || UI_PARAM === "c" ? UI_PARAM : "b";
-const IS_B = UI_VARIANT === "b";
-const IS_C = UI_VARIANT === "c";
+// ================= v3 design tokens — neo-brutalist =================
+// Cream paper, ink outlines, hard offset shadows. Every surface is a sticker:
+// white fill, 2.5px ink border, solid drop shadow. No blur, no glass, no gradients
+// except on the loud accent blocks.
+const INK = "#14120F";
 
 const T = {
-  bg: IS_C ? "#F6F3FF" : IS_B ? "#07080D" : "#05060A",
-  card: IS_C ? "rgba(255,255,255,0.88)" : IS_B ? "rgba(20,22,26,0.88)" : "rgba(21,24,34,0.74)",
-  card2: IS_C ? "rgba(244,241,255,0.94)" : IS_B ? "rgba(38,35,30,0.92)" : "rgba(38,43,58,0.82)",
-  cardHi: IS_C ? "rgba(255,255,255,0.78)" : IS_B ? "rgba(255,218,112,0.16)" : "rgba(255,255,255,0.12)",
-  border: IS_C ? "rgba(36,28,68,0.12)" : IS_B ? "rgba(255,218,112,0.18)" : "rgba(255,255,255,0.14)",
-  border2: IS_C ? "rgba(36,28,68,0.09)" : IS_B ? "rgba(255,255,255,0.105)" : "rgba(255,255,255,0.085)",
-  text: IS_C ? "#21183D" : "#FFFFFF",
-  sub: IS_C ? "rgba(33,24,61,0.66)" : IS_B ? "rgba(245,241,226,0.68)" : "rgba(239,242,255,0.68)",
-  sub2: IS_C ? "rgba(33,24,61,0.42)" : IS_B ? "rgba(245,241,226,0.42)" : "rgba(239,242,255,0.43)",
-  blue: IS_C ? "#4667FF" : IS_B ? "#5CD6FF" : "#4EA1FF",
-  indigo: IS_C ? "#7D5CFF" : IS_B ? "#6C7CFF" : "#7C6CFF",
-  green: IS_C ? "#13C984" : IS_B ? "#8BFF7A" : "#40E07F",
-  orange: IS_C ? "#FF9D2E" : IS_B ? "#FFB84D" : "#FFAE3D",
-  red: IS_C ? "#FF4F78" : IS_B ? "#FF5B62" : "#FF453A",
-  purple: IS_C ? "#8E55FF" : IS_B ? "#B989FF" : "#C875FF",
-  yellow: IS_C ? "#FFC83D" : IS_B ? "#FFE071" : "#FFE66D",
-  gold: IS_C ? "#F4B72F" : IS_B ? "#FFC85A" : "#FFD36A",
-  teal: IS_C ? "#00B7D8" : IS_B ? "#68F0FF" : "#72E4FF",
-  shadow: IS_C ? "0 18px 42px rgba(86,64,150,0.18)" : IS_B ? "0 18px 46px rgba(0,0,0,0.62)" : "0 20px 60px rgba(0,0,0,0.52)",
-  shadowSm: IS_C ? "0 10px 24px rgba(86,64,150,0.14)" : IS_B ? "0 10px 26px rgba(0,0,0,0.46)" : "0 12px 34px rgba(0,0,0,0.34)",
-  grad: IS_C ? "linear-gradient(135deg, #4667FF, #8E55FF 48%, #FF4F78)" : IS_B ? "linear-gradient(135deg, #FFE071, #FF5B62 48%, #68F0FF)" : "linear-gradient(135deg, #4EA1FF, #7C6CFF 52%, #40E07F)",
-  surface: IS_C
-    ? "linear-gradient(180deg, rgba(255,255,255,0.95), rgba(248,246,255,0.74) 54%, rgba(255,255,255,0.58))"
-    : IS_B
-    ? "linear-gradient(180deg, rgba(255,224,113,0.105), rgba(255,255,255,0.035) 40%, rgba(255,91,98,0.035))"
-    : "linear-gradient(180deg, rgba(255,255,255,0.105), rgba(255,255,255,0.035) 46%, rgba(255,255,255,0.018))",
-  font: `'Fredoka', -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif`,
-  display: `'Fredoka', -apple-system, BlinkMacSystemFont, sans-serif`,
+  bg: "#F3ECDC",
+  card: "#FFFFFF",
+  card2: "#E7E2D4",
+  cardHi: "rgba(20,18,15,0.06)",
+  border: INK,
+  border2: INK,
+  ink: INK,
+  text: INK,
+  sub: "#6E6A5E",
+  sub2: "#8A8578",
+  blue: "#2B4CF2",
+  indigo: "#8B5CF6",
+  green: "#23D18B",
+  orange: "#FF8A3D",
+  red: "#FF4D2E",
+  purple: "#8B5CF6",
+  yellow: "#FFD23F",
+  gold: "#FFD23F",
+  teal: "#2B4CF2",
+  // Hard offset shadows — the signature of the whole system.
+  shadow: `5px 5px 0 ${INK}`,
+  shadowSm: `3px 3px 0 ${INK}`,
+  shadowMd: `4px 4px 0 ${INK}`,
+  bw: "2.5px",
+  grad: "linear-gradient(135deg, #FFD23F, #FF4D2E 52%, #2B4CF2)",
+  surface: "linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,0))",
+  font: `'Manrope', -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif`,
+  display: `'Archivo', -apple-system, BlinkMacSystemFont, sans-serif`,
+  mono: `'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif`,
 };
+
+// Rarity / accent block colors used across shop + season.
+const RARITY_BG = { common: "#E7E2D4", rare: "#9CC3FF", epic: "#D6B8FF", legendary: "#FFD23F" };
+
+// Sticker surface — the one recipe every card, chip and button is built from.
+const sticker = (fill = T.card, shadow = T.shadowMd) => ({
+  background: fill,
+  border: `${T.bw} solid ${INK}`,
+  boxShadow: shadow,
+});
 
 const FontImport = () => (
   <style>{`
-    @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap');
-    @keyframes giftShake {
-      0%, 100% { transform: rotate(0) scale(1); }
-      15% { transform: rotate(-14deg) scale(1.04); }
-      30% { transform: rotate(12deg) scale(1.08); }
-      45% { transform: rotate(-10deg) scale(1.12); }
-      60% { transform: rotate(8deg) scale(1.16); }
-      75% { transform: rotate(-5deg) scale(1.2); }
-      90% { transform: rotate(3deg) scale(1.24); }
-    }
-    @keyframes popIn {
-      0% { transform: scale(0); opacity: 0; }
-      55% { transform: scale(1.35); opacity: 1; }
-      75% { transform: scale(0.92); }
-      100% { transform: scale(1); opacity: 1; }
-    }
-    @keyframes floatUp {
-      0% { transform: translateY(18px); opacity: 0; }
-      30% { opacity: 1; }
-      100% { transform: translateY(0); opacity: 1; }
-    }
-    @keyframes confettiFly {
-      0% { transform: translate(0, 0) scale(1) rotate(0deg); opacity: 1; }
-      100% { transform: translate(var(--dx), var(--dy)) scale(0.5) rotate(var(--rot)); opacity: 0; }
-    }
-    @keyframes ringPulse {
-      0% { transform: scale(0.3); opacity: 0.8; }
-      100% { transform: scale(2.6); opacity: 0; }
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; } to { opacity: 1; }
-    }
-    @keyframes shimmer {
-      0% { background-position: -200% center; }
-      100% { background-position: 200% center; }
-    }
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Archivo:wght@600;700;800;900&family=Manrope:wght@500;600;700;800&display=swap');
+    @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+    @keyframes pop { 0% { transform: scale(0.92); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    @keyframes sheetup { 0% { transform: translateY(100%); } 100% { transform: translateY(0); } }
+    @keyframes tilein { 0% { transform: translateY(16px) scale(0.96); opacity: 0; } 100% { transform: translateY(0) scale(1); opacity: 1; } }
+    @keyframes flamef { 0%, 100% { transform: scale(1) rotate(-2deg); } 50% { transform: scale(1.08) rotate(2deg); } }
+    @keyframes burst { 0% { transform: scale(0.3); opacity: 0; } 55% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+    @keyframes dropwiggle { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
     @keyframes spinSlow { to { transform: rotate(360deg); } }
     @keyframes spriteRun { to { background-position-x: var(--sprite-end); } }
-    @keyframes glowPulse {
-      0%, 100% { opacity: 0.55; }
-      50% { opacity: 1; }
-    }
     @keyframes slideUp {
       from { opacity: 0; transform: translateY(16px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    @keyframes auroraDrift {
-      0%, 100% { transform: translate3d(-2%, -1%, 0) scale(1); opacity: 0.84; }
-      50% { transform: translate3d(3%, 2%, 0) scale(1.04); opacity: 1; }
-    }
-    @keyframes softBreathe {
-      0%, 100% { transform: scale(1); filter: brightness(1); }
-      50% { transform: scale(1.025); filter: brightness(1.08); }
-    }
-    @keyframes sheen {
-      0% { transform: translateX(-120%) skewX(-18deg); opacity: 0; }
-      28% { opacity: 0.58; }
-      100% { transform: translateX(180%) skewX(-18deg); opacity: 0; }
-    }
-    @keyframes tabPop {
-      0% { transform: translateY(0) scale(0.96); }
-      55% { transform: translateY(-2px) scale(1.06); }
-      100% { transform: translateY(-1px) scale(1); }
-    }
-    @keyframes flamePulse {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.22); }
-    }
     @keyframes toastIn {
-      from { opacity: 0; transform: translate(-50%, -14px); }
+      from { opacity: 0; transform: translate(-50%, 14px); }
       to { opacity: 1; transform: translate(-50%, 0); }
     }
     .enter { animation: slideUp 460ms cubic-bezier(.22,1,.36,1) backwards; }
-    .pressable { transition: transform 150ms ease, filter 180ms ease, border-color 180ms ease; }
-    .pressable:hover { filter: brightness(1.06); }
-    .pressable:active { transform: scale(0.96); }
-    .premium-card { position: relative; overflow: hidden; backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); }
-    .premium-card::before {
-      content: ""; position: absolute; inset: 0; pointer-events: none;
-      background: linear-gradient(135deg, rgba(255,255,255,0.16), transparent 34%, rgba(255,255,255,0.035) 72%, transparent);
-      opacity: 0.86;
-    }
-    .premium-card::after {
-      content: ""; position: absolute; top: 0; bottom: 0; width: 42%; left: 0; pointer-events: none;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
-      animation: sheen 5.8s ease-in-out infinite;
-    }
-    .premium-card > * { position: relative; z-index: 1; }
+    /* Brutalist press: the sticker slides into its own shadow instead of scaling. */
+    .pressable { transition: transform 110ms ease, box-shadow 110ms ease, filter 160ms ease; }
+    .pressable:hover { filter: brightness(1.03); }
+    .pressable:active { transform: translate(3px, 3px); box-shadow: 0 0 0 ${INK} !important; }
+    .premium-card { position: relative; }
     button { -webkit-tap-highlight-color: transparent; }
     * { box-sizing: border-box; }
-    html, body { margin: 0; overflow-x: hidden; overscroll-behavior: none; background: #05060A; }
+    html, body { margin: 0; overflow-x: hidden; overscroll-behavior: none; background: ${INK}; }
     input { font-size: 16px; }
+    .sd-scroll::-webkit-scrollbar { width: 0; display: none; }
   `}</style>
 );
 
@@ -350,6 +298,16 @@ const ICONS = {
       <circle cx="15" cy="11" r="1.6" fill="currentColor" stroke="none" />
     </>
   ),
+  chevron: <path d="M9 18l6-6-6-6" />,
+  chevronLeft: <path d="M15 18l-6-6 6-6" />,
+  menu: (
+    <>
+      <rect x="4" y="4" width="7" height="7" rx="1.5" />
+      <rect x="13" y="4" width="7" height="7" rx="1.5" />
+      <rect x="4" y="13" width="7" height="7" rx="1.5" />
+      <rect x="13" y="13" width="7" height="7" rx="1.5" />
+    </>
+  ),
 };
 
 const Icon = ({ name, size = 22, color = "#fff", strokeWidth = 2, style }) => (
@@ -368,13 +326,15 @@ const TIERS = [
 ];
 const tierOf = (elo) => [...TIERS].reverse().find((t) => elo >= t.min);
 
+// `bg` is the pastel block behind each game's icon — the tile keeps its ink outline,
+// so the pastel is the only thing that distinguishes one game from another.
 const GAMES = [
-  { id: "draw",      name: "Duel Draw",   icon: "bolt",   emoji: "⚡️", desc: "React on green · hold on red", color: T.blue },
-  { id: "bullseye",  name: "Bullseye",    icon: "target", emoji: "🎯", desc: "Stop it dead-center",          color: T.teal },
-  { id: "numbers",   name: "Number Rush", icon: "grid",   emoji: "🔢", desc: "Tap 1→25 fast",                color: T.orange },
-  { id: "oddone",    name: "Odd One Out", icon: "target", emoji: "🎨", desc: "Spot the odd tile",            color: T.purple },
-  { id: "chimp",     name: "Chimp Test",  icon: "grid",   emoji: "🧠", desc: "Memorize the order",           color: T.green },
-  { id: "quickmath", name: "Quick Math",  icon: "divide", emoji: "➗", desc: "True or false, fast",          color: T.yellow },
+  { id: "draw",      name: "Duel Draw",   icon: "bolt",   emoji: "⚡️", desc: "React on green · hold on red", color: T.blue,   bg: "#FFB4A6" },
+  { id: "bullseye",  name: "Bullseye",    icon: "target", emoji: "🎯", desc: "Stop it dead-center",          color: T.teal,   bg: "#C7B8FF" },
+  { id: "numbers",   name: "Number Rush", icon: "grid",   emoji: "🔢", desc: "Tap 1→25 fast",                color: T.orange, bg: "#B7EFCF" },
+  { id: "oddone",    name: "Odd One Out", icon: "target", emoji: "🎨", desc: "Spot the odd tile",            color: T.purple, bg: "#A9CCFF" },
+  { id: "chimp",     name: "Chimp Test",  icon: "grid",   emoji: "🧠", desc: "Memorize the order",           color: T.green,  bg: "#E0C1FF" },
+  { id: "quickmath", name: "Quick Math",  icon: "divide", emoji: "➗", desc: "True or false, fast",          color: T.yellow, bg: "#FFE08A" },
 ];
 
 const BOTS = [
@@ -466,107 +426,71 @@ const ACTIVITY = [
 // ================= UI atoms =================
 const Card = ({ children, style, onClick, delay = 0 }) => (
   <div onClick={onClick} className={`premium-card enter${onClick ? " pressable" : ""}`}
-    style={{ background: `${T.surface}, ${T.card}`, border: `1px solid ${T.border2}`, borderRadius: IS_C ? 30 : IS_B ? 16 : 22, padding: 18, animationDelay: `${delay}ms`,
-      boxShadow: IS_C
-        ? `0 8px 0 rgba(70,103,255,0.08), ${T.shadowSm}`
-        : IS_B ? `inset 0 1px 0 ${T.cardHi}, 0 8px 0 rgba(255,224,113,0.08), ${T.shadowSm}` : `inset 0 1px 0 ${T.cardHi}, ${T.shadowSm}`,
-      ...style }}>
+    style={{ ...sticker(), borderRadius: 14, padding: 16, animationDelay: `${delay}ms`,
+      cursor: onClick ? "pointer" : undefined, ...style }}>
     {children}
   </div>
 );
 
-const Pill = ({ children, color = T.blue }) => (
-  <span style={{ fontSize: 12, fontWeight: 700, color, background: `${color}22`, border: `1px solid ${color}28`,
-    borderRadius: 999, padding: "5px 12px", letterSpacing: 0.2, whiteSpace: "nowrap", boxShadow: `0 0 18px ${color}12` }}>
-    {children}
-  </span>
-);
-
-const H1 = ({ children, sub, right }) => (
-  <div style={{ marginBottom: 18, position: "relative" }}>
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-      <h1 style={{ fontSize: 34, fontWeight: 800, margin: "4px 0 0", letterSpacing: 0, fontFamily: T.display, lineHeight: 1.05,
-        textShadow: IS_C ? "none" : "0 14px 34px rgba(0,0,0,0.42)", textTransform: IS_B ? "uppercase" : "none" }}>{children}</h1>
-      {right}
-    </div>
-    {sub && <div style={{ color: T.sub, fontSize: 14.5, marginTop: 5 }}>{sub}</div>}
-  </div>
-);
-
-const Ring = ({ size = 120, stroke = 11, progress = 0, color = T.blue, color2, children }) => {
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const gid = `rg-${size}-${(color + (color2 || "")).replace(/[^a-zA-Z0-9]/g, "")}`;
+// Chips are solid color blocks with an ink outline — never translucent.
+const Pill = ({ children, color = T.blue }) => {
+  // Loud accents carry white text; pale ones keep the ink.
+  const onDark = color === T.blue || color === T.red || color === T.purple || color === T.indigo;
   return (
-    <div style={{ position: "relative", width: size, height: size }}>
-      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-        {color2 && (
-          <defs>
-            <linearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor={color} />
-              <stop offset="1" stopColor={color2} />
-            </linearGradient>
-          </defs>
-        )}
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={stroke} />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color2 ? `url(#${gid})` : color} strokeWidth={stroke} strokeLinecap="round"
-          strokeDasharray={c} strokeDashoffset={c * (1 - Math.min(1, progress))}
-          style={{ transition: "stroke-dashoffset 900ms cubic-bezier(.22,1,.36,1)", filter: `drop-shadow(0 0 6px ${color}55)` }} />
-      </svg>
-      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-        {children}
-      </div>
-    </div>
+    <span style={{ fontSize: 11.5, fontWeight: 800, color: onDark ? "#fff" : INK, background: color,
+      border: `2px solid ${INK}`, borderRadius: 7, padding: "3px 9px", letterSpacing: 0.2, whiteSpace: "nowrap",
+      display: "inline-block" }}>
+      {children}
+    </span>
   );
 };
 
+
+
+// Loud accents get white text; pale ones (yellow, green, cream) keep the ink.
+const inkOn = (color) => (color === T.blue || color === T.red || color === T.purple || color === T.indigo ? "#fff" : INK);
+
 const BigButton = ({ children, onClick, color = T.blue, style }) => (
   <button onClick={onClick} className="pressable"
-    style={{ width: "100%", padding: "16px 0", borderRadius: IS_C ? 28 : 20, border: "none",
-      background: `linear-gradient(180deg, rgba(255,255,255,0.24), rgba(255,255,255,0.04) 48%), ${color}`, color: "#fff",
-      fontSize: 17, fontWeight: 800, fontFamily: T.display, cursor: "pointer",
-      boxShadow: IS_C ? `0 8px 0 rgba(33,24,61,0.10), 0 16px 30px ${color}28` : `0 12px 34px ${color}4f, inset 0 1px 0 rgba(255,255,255,0.22)`, ...style }}>
+    style={{ width: "100%", padding: "15px 0", borderRadius: 12, border: `${T.bw} solid ${INK}`,
+      background: color, color: inkOn(color),
+      fontSize: 16, fontWeight: 900, fontFamily: T.display, textTransform: "uppercase", letterSpacing: "0.01em",
+      cursor: "pointer", boxShadow: T.shadowMd, ...style }}>
     {children}
   </button>
 );
 
 const Switch = ({ on, toggle }) => (
-  <div onClick={toggle} style={{ width: 51, height: 31, borderRadius: 16, background: on ? T.green : "rgba(120,120,128,0.32)", position: "relative", transition: "background 200ms", cursor: "pointer", flexShrink: 0 }}>
-    <div style={{ position: "absolute", top: 2, left: on ? 22 : 2, width: 27, height: 27, borderRadius: 14, background: "#fff", transition: "left 200ms", boxShadow: "0 3px 8px rgba(0,0,0,0.3)" }} />
+  <div onClick={toggle} style={{ width: 52, height: 30, borderRadius: 8, background: on ? T.green : T.card2,
+    border: `${T.bw} solid ${INK}`, position: "relative", transition: "background 200ms", cursor: "pointer", flexShrink: 0 }}>
+    <div style={{ position: "absolute", top: 2, left: on ? 24 : 2, width: 22, height: 22, borderRadius: 5,
+      background: "#fff", border: `2px solid ${INK}`, transition: "left 200ms" }} />
   </div>
 );
 
 const Sheet = ({ onClose, children }) => (
-  <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.62)", backdropFilter: "blur(10px)",
-    WebkitBackdropFilter: "blur(10px)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+  <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(20,18,15,0.5)",
+    zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
     <div onClick={(e) => e.stopPropagation()}
-      style={{ width: "100%", maxWidth: 400, boxSizing: "border-box",
-        background: "linear-gradient(180deg, rgba(36,40,55,0.96), rgba(12,13,19,0.98))", borderRadius: "28px 28px 0 0", padding: "10px 20px 34px",
-        animation: "slideUp 340ms cubic-bezier(.22,1,.36,1)",
-        border: `1px solid ${T.border}`, borderBottom: "none", boxShadow: "0 -24px 80px rgba(0,0,0,0.55)",
-        maxHeight: "85vh", overflowY: "auto", overflowX: "hidden" }}>
-      <div style={{ width: 38, height: 5, borderRadius: 3, background: "rgba(255,255,255,0.25)", margin: "6px auto 16px" }} />
+      style={{ width: "100%", maxWidth: 400, boxSizing: "border-box", background: T.bg,
+        borderRadius: "26px 26px 0 0", padding: "10px 20px 30px",
+        animation: "sheetup 280ms cubic-bezier(.22,1,.36,1)",
+        borderTop: `3px solid ${INK}`, borderLeft: `3px solid ${INK}`, borderRight: `3px solid ${INK}`,
+        maxHeight: "85vh", overflowY: "auto", overflowX: "hidden" }}
+      className="sd-scroll">
+      <div style={{ width: 44, height: 6, borderRadius: 3, background: INK, margin: "6px auto 16px" }} />
       {children}
     </div>
   </div>
 );
 
 const BrandMark = ({ size = 76 }) => (
-  <div style={{ width: size, height: size, borderRadius: Math.round(size * 0.32),
+  // flexShrink:0 — it lives in a scrolling column flexbox that would otherwise squash it.
+  <div style={{ width: size, height: size, flexShrink: 0, borderRadius: Math.round(size * 0.26),
     display: "flex", alignItems: "center", justifyContent: "center",
-    background: IS_C
-      ? "linear-gradient(145deg, #4667FF, #8E55FF 54%, #FF4F78)"
-      : IS_B
-      ? "linear-gradient(145deg, rgba(255,224,113,0.32), rgba(255,91,98,0.20) 48%, rgba(104,240,255,0.16))"
-      : "linear-gradient(145deg, rgba(78,161,255,0.34), rgba(124,108,255,0.22) 48%, rgba(64,224,127,0.18))",
-    border: IS_C ? "5px solid rgba(255,255,255,0.72)" : IS_B ? "1px solid rgba(255,224,113,0.32)" : "1px solid rgba(255,255,255,0.18)",
-    boxShadow: IS_C
-      ? "0 10px 0 rgba(70,103,255,0.14), 0 22px 42px rgba(142,85,255,0.22)"
-      : IS_B
-      ? "0 22px 54px rgba(255,91,98,0.18), 0 8px 0 rgba(255,224,113,0.12), inset 0 1px 0 rgba(255,255,255,0.22)"
-      : "0 22px 54px rgba(78,161,255,0.22), inset 0 1px 0 rgba(255,255,255,0.22)",
-    animation: "softBreathe 3.8s ease-in-out infinite" }}>
-    <Icon name="swords" size={Math.round(size * 0.52)} color="#fff" strokeWidth={1.85} />
+    background: T.yellow, border: `3px solid ${INK}`, boxShadow: `6px 6px 0 ${INK}`,
+    animation: "bob 2.2s ease-in-out infinite" }}>
+    <Icon name="swords" size={Math.round(size * 0.5)} color={INK} strokeWidth={2.6} />
   </div>
 );
 
@@ -725,23 +649,21 @@ function ReactionGame({ onFinish, rounds = 5 }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 14, alignItems: "center" }}>
       <div style={{ display: "flex", gap: 6 }}>
         {Array.from({ length: rounds }).map((_, i) => (
-          <div key={i} style={{ width: 26, height: 5, borderRadius: 3, background: i < times.length ? T.blue : "rgba(255,255,255,0.15)" }} />
+          <div key={i} style={{ width: 26, height: 5, borderRadius: 3, background: i < times.length ? T.blue : T.card2 }} />
         ))}
       </div>
       <button onClick={tap}
-        style={{ width: "100%", height: 260, borderRadius: 28, color: "#fff",
-          border: phase === "intro" ? `1px solid ${T.border}` : "none",
-          background: phase === "intro"
-            ? `radial-gradient(120% 90% at 50% 0%, ${T.blue}1c, transparent 60%), linear-gradient(160deg, ${T.card2}, ${T.card})`
-            : `linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0) 42%), ${colors[phase]}`,
-          fontSize: 22, fontWeight: 700, fontFamily: T.display, cursor: "pointer", transition: "background 120ms",
-          WebkitTapHighlightColor: "transparent",
-          boxShadow: phase === "go" ? `0 0 60px ${T.green}66` : phase === "intro" ? T.shadowSm : `0 12px 34px ${colors[phase]}44` }}>
+        style={{ width: "100%", height: 260, borderRadius: 18,
+          border: `${T.bw} solid ${INK}`, boxShadow: T.shadow,
+          background: phase === "intro" ? T.card : colors[phase],
+          color: phase === "intro" ? INK : inkOn(colors[phase]),
+          fontSize: 24, fontWeight: 900, fontFamily: T.display, textTransform: "uppercase",
+          cursor: "pointer", transition: "background 120ms", WebkitTapHighlightColor: "transparent" }}>
         {phase === "intro" ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
-            <div style={{ width: 66, height: 66, borderRadius: 22, display: "flex", alignItems: "center", justifyContent: "center",
-              background: `${T.blue}22`, border: `1px solid ${T.blue}55` }}>
-              <Icon name="bolt" size={32} color={T.blue} />
+            <div style={{ width: 66, height: 66, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center",
+              background: T.blue, border: `${T.bw} solid ${INK}` }}>
+              <Icon name="bolt" size={32} color="#fff" strokeWidth={2.4} />
             </div>
             <span>Tap to start</span>
             <span style={{ fontSize: 13, fontWeight: 500, color: T.sub }}>Tap the instant it turns green</span>
@@ -839,11 +761,11 @@ function MemoryGame({ onFinish }) {
         <Pill color={T.purple}>Level {level}</Pill>
         <Pill color={phase === "input" && timeLeft <= 3 ? T.red : T.teal}>{phase === "input" ? Math.max(0, timeLeft).toFixed(1) : budget.toFixed(0)}"</Pill>
         <span style={{ display: "flex", gap: 3 }}>{[0, 1, 2].map((n) => (
-          <Icon key={n} name="heart" size={15} color={n < lives ? T.red : "rgba(255,255,255,0.18)"} strokeWidth={0} style={{ fill: n < lives ? T.red : "rgba(255,255,255,0.18)" }} />
+          <Icon key={n} name="heart" size={15} color={n < lives ? T.red : T.card2} strokeWidth={0} style={{ fill: n < lives ? T.red : T.card2 }} />
         ))}</span>
       </div>
       {/* time bar */}
-      <div style={{ width: "100%", maxWidth: 300, height: 5, borderRadius: 3, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
+      <div style={{ width: "100%", maxWidth: 300, height: 5, borderRadius: 3, background: T.card2, overflow: "hidden" }}>
         <div style={{ height: "100%", borderRadius: 3, width: `${phase === "input" ? (timeLeft / budget) * 100 : 100}%`,
           background: timeLeft <= 3 && phase === "input" ? T.red : T.teal, transition: "width 100ms linear" }} />
       </div>
@@ -856,7 +778,7 @@ function MemoryGame({ onFinish }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, width: "100%", maxWidth: 300 }}>
         {Array.from({ length: 9 }).map((_, i) => (
           <button key={i} onClick={() => tap(i)}
-            style={{ aspectRatio: "1", borderRadius: 18, border: `1px solid ${T.border}`,
+            style={{ aspectRatio: "1", borderRadius: 18, border: `${T.bw} solid ${INK}`,
               background: flash === i ? flashColor : T.card2,
               boxShadow: flash === i ? `0 0 30px ${flashColor}88` : "none",
               transition: "background 140ms, box-shadow 140ms", cursor: "pointer", WebkitTapHighlightColor: "transparent" }} />
@@ -915,8 +837,8 @@ function MathGame({ onFinish }) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}>
         <div style={{ width: 84, height: 84, borderRadius: 26, display: "flex", alignItems: "center", justifyContent: "center",
-          background: `linear-gradient(135deg, ${T.orange}2e, ${T.orange}0d)`, border: `1px solid ${T.orange}40` }}>
-          <Icon name="divide" size={40} color={T.orange} strokeWidth={2.2} />
+          background: T.orange, border: `${T.bw} solid ${INK}` }}>
+          <Icon name="divide" size={40} color={INK} strokeWidth={2.4} />
         </div>
         <div style={{ color: T.sub, textAlign: "center", fontSize: 15 }}>Solve as many problems as you can in 30 seconds.</div>
         <BigButton color={T.orange} onClick={() => setStarted(true)}>Start</BigButton>
@@ -936,8 +858,8 @@ function MathGame({ onFinish }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, width: "100%", maxWidth: 300 }}>
         {["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "OK"].map((k) => (
           <button key={k} onClick={() => key(k)}
-            style={{ padding: "16px 0", borderRadius: 14, border: `1px solid ${T.border}`,
-              background: k === "OK" ? T.orange : T.card2, color: "#fff", fontSize: 20, fontWeight: 700,
+            style={{ padding: "16px 0", borderRadius: 14, border: `${T.bw} solid ${INK}`,
+              background: k === "OK" ? T.orange : T.card2, color: INK, fontSize: 20, fontWeight: 700,
               fontFamily: T.font, cursor: "pointer", WebkitTapHighlightColor: "transparent" }}>
             {k}
           </button>
@@ -986,8 +908,8 @@ function TypingGame({ onFinish }) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}>
         <div style={{ width: 84, height: 84, borderRadius: 26, display: "flex", alignItems: "center", justifyContent: "center",
-          background: `linear-gradient(135deg, ${T.green}2e, ${T.green}0d)`, border: `1px solid ${T.green}40` }}>
-          <Icon name="keyboard" size={40} color={T.green} strokeWidth={2} />
+          background: T.green, border: `${T.bw} solid ${INK}` }}>
+          <Icon name="keyboard" size={40} color={INK} strokeWidth={2.4} />
         </div>
         <div style={{ color: T.sub, textAlign: "center", fontSize: 15 }}>Type the words as fast as you can — 30 seconds.</div>
         <BigButton color={T.green} onClick={() => { setStarted(true); setTimeout(() => inputRef.current?.focus(), 50); }}>Start</BigButton>
@@ -1005,7 +927,7 @@ function TypingGame({ onFinish }) {
         placeholder="type here…"
         style={{ width: "100%", maxWidth: 300, padding: "16px 18px", borderRadius: 16,
           border: `1px solid ${word.toLowerCase().startsWith(val.toLowerCase()) ? T.border : T.red}`,
-          background: T.card2, color: "#fff", fontSize: 20, fontFamily: T.font, outline: "none", textAlign: "center" }} />
+          background: T.card2, color: INK, fontSize: 20, fontFamily: T.font, outline: "none", textAlign: "center" }} />
     </div>
   );
 }
@@ -1033,18 +955,19 @@ const shuffleSeeded = (arr, seed) => {
 const Dots = ({ n, done, color = T.blue }) => (
   <div style={{ display: "flex", gap: 6 }}>
     {Array.from({ length: n }).map((_, i) => (
-      <div key={i} style={{ width: 24, height: 5, borderRadius: 3, background: i < done ? color : "rgba(255,255,255,0.15)", transition: "background 200ms" }} />
+      <div key={i} style={{ width: 24, height: 8, borderRadius: 3, border: `2px solid ${INK}`,
+        background: i < done ? color : T.card2, transition: "background 200ms" }} />
     ))}
   </div>
 );
 const GameIntro = ({ icon, color, title, sub, onStart, cta = "Start" }) => (
   <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "center" }}>
-    <div style={{ width: 84, height: 84, borderRadius: 26, display: "flex", alignItems: "center", justifyContent: "center",
-      background: `linear-gradient(135deg, ${color}2e, ${color}0d)`, border: `1px solid ${color}40` }}>
-      <Icon name={icon} size={40} color={color} strokeWidth={2.1} />
+    <div style={{ width: 84, height: 84, borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center",
+      ...sticker(color, T.shadow) }}>
+      <Icon name={icon} size={40} color={inkOn(color)} strokeWidth={2.4} />
     </div>
-    <div style={{ fontSize: 19, fontWeight: 700, fontFamily: T.display }}>{title}</div>
-    <div style={{ color: T.sub, textAlign: "center", fontSize: 14, maxWidth: 280, lineHeight: 1.4 }}>{sub}</div>
+    <div style={{ fontSize: 20, fontWeight: 900, fontFamily: T.display, color: INK, textTransform: "uppercase" }}>{title}</div>
+    <div style={{ color: T.sub, textAlign: "center", fontSize: 13.5, fontWeight: 600, maxWidth: 280, lineHeight: 1.45 }}>{sub}</div>
     <BigButton color={color} onClick={onStart}>{cta}</BigButton>
   </div>
 );
@@ -1094,10 +1017,10 @@ function DuelDrawGame({ onFinish, onBegin, rounds = 5 }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 14, alignItems: "center" }}>
       <Dots n={rounds} done={shown} />
       <button onClick={tap}
-        style={{ width: "100%", height: 260, borderRadius: 28, border: "none", color: "#fff", cursor: "pointer",
-          background: `linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0) 42%), ${bg}`,
-          fontSize: 26, fontWeight: 800, fontFamily: T.display, transition: "background 90ms", WebkitTapHighlightColor: "transparent",
-          boxShadow: phase === "green" ? `0 0 60px ${T.green}77` : phase === "red" ? `0 0 60px ${T.red}77` : T.shadowSm }}>
+        style={{ width: "100%", height: 260, borderRadius: 18, border: `${T.bw} solid ${INK}`, cursor: "pointer",
+          background: bg, color: inkOn(bg), boxShadow: T.shadow,
+          fontSize: 26, fontWeight: 900, fontFamily: T.display, textTransform: "uppercase",
+          transition: "background 90ms", WebkitTapHighlightColor: "transparent" }}>
         {label}
       </button>
       <div style={{ color: T.sub2, fontSize: 12, minHeight: 16 }}>{res.current.length > 0 && `${res.current.join(" · ")} ms`}</div>
@@ -1154,7 +1077,7 @@ function BullseyeGame({ onFinish, onBegin, rounds = 5 }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 18, alignItems: "center" }}>
       <Dots n={rounds} done={scores.length} color={T.teal} />
       <div style={{ width: "100%", height: 64, borderRadius: 18, position: "relative", overflow: "hidden",
-        background: T.card2, border: `1px solid ${T.border}` }}>
+        background: T.card2, border: `${T.bw} solid ${INK}` }}>
         <div style={{ position: "absolute", top: 0, bottom: 0, left: `${50 - zone}%`, width: `${zone * 2}%`,
           background: `linear-gradient(90deg, ${T.teal}22, ${T.teal}44, ${T.teal}22)`, borderLeft: `2px dashed ${T.teal}88`, borderRight: `2px dashed ${T.teal}88` }} />
         <div style={{ position: "absolute", top: 0, bottom: 0, left: "50%", width: 2, background: `${T.teal}`, transform: "translateX(-50%)" }} />
@@ -1209,10 +1132,12 @@ function NumberRushGame({ onFinish, onBegin }) {
           const found = n < next;
           return (
             <button key={n} onClick={() => tap(n)}
-              style={{ aspectRatio: "1", minWidth: 0, borderRadius: 12, fontSize: 18, fontWeight: 800, fontFamily: T.display, cursor: "pointer",
-                border: `1px solid ${wrong === n ? T.red : T.border}`, transition: "background 120ms, opacity 120ms",
-                background: wrong === n ? T.red : found ? "rgba(48,209,88,0.14)" : T.card2,
-                color: found ? T.green : "#fff", opacity: found ? 0.55 : 1, WebkitTapHighlightColor: "transparent" }}>
+              style={{ aspectRatio: "1", minWidth: 0, borderRadius: 10, fontSize: 20, fontWeight: 900, fontFamily: T.display,
+                cursor: "pointer", border: `${T.bw} solid ${INK}`, transition: "background 120ms",
+                // White tile + ink numerals: the beige fill washed the digits out entirely.
+                background: wrong === n ? T.red : found ? T.green : T.card,
+                color: wrong === n ? "#fff" : INK, boxShadow: found ? "none" : `2px 2px 0 ${INK}`,
+                WebkitTapHighlightColor: "transparent" }}>
               {found ? "" : n}
             </button>
           );
@@ -1262,7 +1187,8 @@ function OddOneGame({ onFinish, onBegin }) {
         outline: flash === -1 ? `2px solid ${T.red}` : "none", outlineOffset: 4, borderRadius: 12 }}>
         {Array.from({ length: board.cells }).map((_, i) => (
           <button key={i} onClick={() => tap(i)}
-            style={{ aspectRatio: "1", minWidth: 0, borderRadius: 10, border: "none", cursor: "pointer", WebkitTapHighlightColor: "transparent",
+            style={{ aspectRatio: "1", minWidth: 0, borderRadius: 8, border: `2px solid ${INK}`, cursor: "pointer",
+              WebkitTapHighlightColor: "transparent",
               background: i === board.odd ? board.oddColor : board.base,
               transform: flash === i ? "scale(0.9)" : "none", transition: "transform 120ms" }} />
         ))}
@@ -1312,7 +1238,7 @@ function ChimpGame({ onFinish, onBegin }) {
       <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
         <Pill color={T.green}>Length {n}</Pill>
         <span style={{ display: "flex", gap: 3 }}>{[0, 1, 2].map((h) => (
-          <Icon key={h} name="heart" size={15} color={h < lives ? T.red : "rgba(255,255,255,0.18)"} strokeWidth={0} style={{ fill: h < lives ? T.red : "rgba(255,255,255,0.18)" }} />
+          <Icon key={h} name="heart" size={15} color={h < lives ? T.red : T.card2} strokeWidth={0} style={{ fill: h < lives ? T.red : T.card2 }} />
         ))}</span>
       </div>
       <div style={{ color: T.sub, fontSize: 13, minHeight: 16 }}>{phase === "show" ? "Memorize…" : "Repeat the order"}</div>
@@ -1322,10 +1248,11 @@ function ChimpGame({ onFinish, onBegin }) {
           const filled = num != null;
           return (
             <button key={cell} onClick={() => tap(cell)}
-              style={{ aspectRatio: "1", minWidth: 0, borderRadius: 12, cursor: filled ? "pointer" : "default", WebkitTapHighlightColor: "transparent",
-                border: `1px solid ${filled ? T.green + "66" : "rgba(255,255,255,0.06)"}`,
-                background: flash === cell ? T.green : filled ? (phase === "show" ? "rgba(48,209,88,0.16)" : "rgba(48,209,88,0.10)") : "transparent",
-                color: "#fff", fontSize: 18, fontWeight: 800, fontFamily: T.display, transition: "background 100ms" }}>
+              style={{ aspectRatio: "1", minWidth: 0, borderRadius: 10, cursor: filled ? "pointer" : "default", WebkitTapHighlightColor: "transparent",
+                border: `${T.bw} solid ${INK}`,
+                // Ink numerals — white ones disappeared against the pale fills.
+                background: flash === cell ? T.green : filled ? (phase === "show" ? T.yellow : T.card) : T.card2,
+                color: INK, fontSize: 20, fontWeight: 900, fontFamily: T.display, transition: "background 100ms" }}>
               {phase === "show" && filled ? num : ""}
             </button>
           );
@@ -1373,22 +1300,22 @@ function QuickMathGame({ onFinish, onBegin }) {
         {streak >= 3 && <Pill color={T.orange}>{streak} streak</Pill>}
         <Pill color={time <= 5 ? T.red : T.teal}>{Math.max(0, time).toFixed(1)}s</Pill>
       </div>
-      <div style={{ width: "100%", height: 150, borderRadius: 24, display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 40, fontWeight: 800, fontFamily: T.display, letterSpacing: 1,
-        background: flash === "ok" ? "rgba(48,209,88,0.16)" : flash === "no" ? "rgba(255,69,58,0.16)" : T.card2,
-        border: `1px solid ${flash === "ok" ? T.green : flash === "no" ? T.red : T.border}`, transition: "background 100ms" }}>
+      <div style={{ width: "100%", height: 150, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 40, fontWeight: 900, fontFamily: T.display, letterSpacing: 1, color: INK,
+        background: flash === "ok" ? T.green : flash === "no" ? T.red : T.card,
+        border: `${T.bw} solid ${INK}`, boxShadow: T.shadow, transition: "background 100ms" }}>
         {q?.text}
       </div>
       <div style={{ display: "flex", gap: 12, width: "100%" }}>
         <button onClick={() => answer(false)} className="pressable"
-          style={{ flex: 1, height: 76, borderRadius: 22, border: `1px solid ${T.red}66`, background: `${T.red}1f`, cursor: "pointer",
+          style={{ flex: 1, height: 76, borderRadius: 14, border: `${T.bw} solid ${INK}`, background: T.red, boxShadow: T.shadowMd, cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Icon name="x" size={34} color={T.red} strokeWidth={3} />
+          <Icon name="x" size={34} color="#fff" strokeWidth={3} />
         </button>
         <button onClick={() => answer(true)} className="pressable"
-          style={{ flex: 1, height: 76, borderRadius: 22, border: `1px solid ${T.green}66`, background: `${T.green}1f`, cursor: "pointer",
+          style={{ flex: 1, height: 76, borderRadius: 14, border: `${T.bw} solid ${INK}`, background: T.green, boxShadow: T.shadowMd, cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Icon name="check" size={34} color={T.green} strokeWidth={3} />
+          <Icon name="check" size={34} color={INK} strokeWidth={3} />
         </button>
       </div>
     </div>
@@ -1449,7 +1376,7 @@ function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "d
           <Icon name={game.icon} size={16} color={game.color} /> {game.name} · best score wins
         </div>
         {stake > 0 && (
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "rgba(255,214,10,0.14)",
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: T.yellow,
             border: `1px solid ${T.yellow}44`, borderRadius: 999, padding: "6px 14px", color: T.yellow, fontSize: 14, fontWeight: 600 }}>
             <Icon name="trophy" size={14} color={T.yellow} /> {stake} points on the line
           </div>
@@ -1511,89 +1438,101 @@ function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "d
 }
 
 // ================= Reward opening animation =================
-const CONFETTI = ["#FFD60A", "#64D2FF", "#30D158", "#FF9F0A", "#BF5AF2", "#0A84FF", "#FF375F"];
 
-function RewardOverlay({ onDone }) {
-  const [phase, setPhase] = useState("shake"); // shake | burst
-  const particles = useRef(
-    Array.from({ length: 26 }, (_, i) => ({
-      color: CONFETTI[i % CONFETTI.length],
-      round: i % 2 === 0,
-      dx: `${Math.round(Math.random() * 280 - 140)}px`,
-      dy: `${Math.round(-40 - Math.random() * 230)}px`,
-      rot: `${Math.round(Math.random() * 540 - 270)}deg`,
-      delay: Math.random() * 0.15,
-      size: 8 + Math.round(Math.random() * 7),
-    }))
-  );
+// ================= Run reveal / points claim =================
+// The one screen where points are actually banked. Full-bleed yellow panel:
+// score → how you did against the field → what it moved → your drop → collect.
+// Every drop pays out coins for real — nothing here is decorative. The mockup had
+// a "2× booster" and a "frame shard" too, but neither exists in the game yet and a
+// reward that silently does nothing is worse than no reward.
+const DROPS = [
+  { icon: "🪙", title: "+60 coins", sub: "Every bit counts", coins: 60 },
+  { icon: "🪙", title: "+120 coins", sub: "Nice haul!", coins: 120 },
+  { icon: "💰", title: "+180 coins", sub: "That'll buy something", coins: 180 },
+  { icon: "💎", title: "+250 coins", sub: "Lucky drop!", coins: 250 },
+  { icon: "👑", title: "+400 coins", sub: "Jackpot — rare one!", coins: 400 },
+];
+const rollDrop = () => DROPS[Math.floor(Math.random() * DROPS.length)];
 
-  const onDoneRef = useRef(onDone);
-  useEffect(() => {
-    onDoneRef.current = onDone;
-  }, [onDone]);
-
-  useEffect(() => {
-    Sound.beep(520, 0.09);
-    const s1 = setTimeout(() => Sound.beep(620, 0.09), 350);
-    const s2 = setTimeout(() => Sound.beep(740, 0.09), 700);
-    const t1 = setTimeout(() => {
-      setPhase("burst");
-      Sound.win();
-    }, 1150);
-    const t2 = setTimeout(() => onDoneRef.current(), 3100);
-    return () => [s1, s2, t1, t2].forEach(clearTimeout);
-  }, []); // run once — must not restart on parent re-renders
+function RevealOverlay({ headline = "Run complete", result, score, pct, rankUp = 0, streak, drop, onCollect }) {
+  const [opened, setOpened] = useState(false);
+  useEffect(() => { Sound.win(); }, []);
 
   return (
-    <div
-      onClick={onDone}
-      style={{
-        position: "absolute", inset: 0, zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center",
-        overflow: "hidden",
-        background: "rgba(0,0,0,0.72)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
-        animation: "fadeIn 250ms ease-out", cursor: "pointer",
-      }}
-    >
-      <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
-        {phase === "shake" ? (
-          <>
-            <div style={{ animation: "giftShake 1.15s ease-in-out", transformOrigin: "50% 90%", filter: `drop-shadow(0 8px 24px ${T.yellow}66)` }}>
-              <Icon name="gift" size={92} color={T.yellow} strokeWidth={1.7} />
-            </div>
-            <div style={{ color: T.sub, fontSize: 14, fontWeight: 700 }}>Opening…</div>
-          </>
-        ) : (
-          <>
-            {/* pulse ring */}
-            <div style={{ position: "absolute", top: 10, width: 130, height: 130, borderRadius: "50%",
-              border: `3px solid ${T.yellow}`, animation: "ringPulse 800ms ease-out forwards" }} />
-            <div style={{ position: "absolute", top: 10, width: 130, height: 130, borderRadius: "50%",
-              border: `2px solid ${T.orange}`, animation: "ringPulse 1100ms ease-out 120ms forwards" }} />
-            {/* confetti */}
-            {particles.current.map((pt, i) => (
-              <span key={i}
-                style={{ position: "absolute", top: 60, width: pt.size, height: pt.size, background: pt.color,
-                  borderRadius: pt.round ? "50%" : 3, pointerEvents: "none",
-                  "--dx": pt.dx, "--dy": pt.dy, "--rot": pt.rot,
-                  animation: `confettiFly 1s cubic-bezier(.16,.8,.4,1) ${pt.delay}s forwards` }} />
-            ))}
-            <div style={{ animation: "popIn 550ms cubic-bezier(.34,1.56,.64,1)", filter: `drop-shadow(0 0 26px ${T.yellow}88)` }}>
-              <Icon name="gift" size={96} color={T.yellow} strokeWidth={1.7} />
-            </div>
-            <div style={{ fontSize: 40, fontWeight: 700, fontFamily: T.display, color: T.yellow,
-              animation: "popIn 600ms cubic-bezier(.34,1.56,.64,1) 150ms backwards",
-              textShadow: `0 0 30px ${T.yellow}66` }}>
-              +50
-            </div>
-            <div style={{ color: "#fff", fontSize: 16, fontWeight: 700, animation: "floatUp 500ms ease-out 300ms backwards" }}>
-              Streak bonus points!
-            </div>
-            <div style={{ color: T.sub2, fontSize: 12, display: "flex", alignItems: "center", gap: 5, animation: "floatUp 500ms ease-out 550ms backwards" }}>
-              <Icon name="flame" size={13} color={T.orange} strokeWidth={2.3} /> 6 day streak — keep going!
-            </div>
-          </>
+    <div style={{ position: "absolute", inset: 0, zIndex: 300, background: T.yellow,
+      display: "flex", flexDirection: "column", padding: "30px 24px 26px",
+      animation: "sheetup 300ms ease both", overflowY: "auto" }} className="sd-scroll">
+
+      <div style={{ textAlign: "center", flexShrink: 0 }}>
+        <div style={{ fontFamily: T.mono, fontWeight: 700, fontSize: 12, letterSpacing: "0.2em", color: INK,
+          textTransform: "uppercase", animation: "burst 500ms ease both" }}>{headline}</div>
+        <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 68, color: INK, lineHeight: 1, marginTop: 8,
+          animation: "burst 500ms 50ms ease both" }}>{score}</div>
+        <div style={{ fontSize: 12.5, fontWeight: 800, color: INK, letterSpacing: "0.04em" }}>POINTS EARNED</div>
+        {result && (
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#5C5320", marginTop: 4 }}>{result}</div>
         )}
       </div>
+
+      {/* How you did against everyone else today */}
+      {pct != null && (
+        <div style={{ marginTop: 22, flexShrink: 0, ...sticker(T.card, T.shadowMd), borderRadius: 14, padding: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontWeight: 800, fontSize: 13 }}>
+            <span style={{ color: INK }}>FASTER THAN</span>
+            <span style={{ fontFamily: T.display, color: T.blue, fontSize: 17 }}>{pct}%</span>
+          </div>
+          <div style={{ height: 14, borderRadius: 5, border: `${T.bw} solid ${INK}`, background: T.bg,
+            marginTop: 10, overflow: "hidden" }}>
+            <div style={{ height: "100%", background: T.blue, width: `${pct}%`,
+              transition: "width 800ms cubic-bezier(.22,1,.36,1)" }} />
+          </div>
+          <div style={{ fontSize: 11, color: T.sub2, fontWeight: 700, marginTop: 7 }}>of everyone who played today</div>
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12, flexShrink: 0 }}>
+        <div style={{ ...sticker(T.green, T.shadowSm), borderRadius: 12, padding: 14, textAlign: "center" }}>
+          <div style={{ fontSize: 10, fontWeight: 800, color: "#083D28" }}>RANK</div>
+          <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 22, color: INK, marginTop: 3 }}>
+            {rankUp > 0 ? `▲ ${rankUp}` : "—"}
+          </div>
+        </div>
+        <div style={{ ...sticker(T.red, T.shadowSm), borderRadius: 12, padding: 14, textAlign: "center" }}>
+          <div style={{ fontSize: 10, fontWeight: 800, color: "#fff" }}>STREAK</div>
+          <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 22, color: "#fff", marginTop: 3 }}>🔥 {streak}</div>
+        </div>
+      </div>
+
+      {/* The drop — the reason to sit through the reveal */}
+      <div style={{ flex: 1, minHeight: 150, display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center", padding: "16px 0" }}>
+        {opened ? (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
+            animation: "burst 500ms ease both" }}>
+            <div style={{ fontSize: 60 }}>{drop.icon}</div>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 20, color: INK, textTransform: "uppercase" }}>{drop.title}</div>
+              <div style={{ fontSize: 13, color: T.sub, fontWeight: 700, marginTop: 2 }}>{drop.sub}</div>
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => { setOpened(true); Sound.win(); }}
+            style={{ border: "none", background: "none", cursor: "pointer",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+            <div style={{ fontSize: 78, animation: "dropwiggle 1.1s ease-in-out infinite" }}>🎁</div>
+            <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 15, color: INK, textTransform: "uppercase" }}>
+              Tap to open your drop
+            </div>
+          </button>
+        )}
+      </div>
+
+      <button className="pressable" onClick={() => onCollect(opened ? drop : null)}
+        style={{ width: "100%", flexShrink: 0, border: `${T.bw} solid ${INK}`, cursor: "pointer", padding: 16,
+          borderRadius: 12, background: INK, color: T.yellow, boxShadow: "4px 4px 0 rgba(20,18,15,0.35)",
+          fontFamily: T.display, fontWeight: 900, fontSize: 16, textTransform: "uppercase" }}>
+        {opened ? "Collect & continue" : "Skip drop"}
+      </button>
     </div>
   );
 }
@@ -1614,10 +1553,10 @@ function PointsGuide() {
     <div style={{ width: "100%" }}>
       {SCORING.map((r) => (
         <div key={r.name} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0",
-          borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+          borderBottom: `2px solid ${INK}` }}>
           <div style={{ width: 42, height: 42, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0, background: `${r.color}1c`, border: `1px solid ${r.color}40` }}>
-            <Icon name={r.icon} size={20} color={r.color} />
+            flexShrink: 0, background: r.color, border: `${T.bw} solid ${INK}` }}>
+            <Icon name={r.icon} size={20} color={inkOn(r.color)} strokeWidth={2.2} />
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14.5, fontWeight: 700 }}>{r.name}</div>
@@ -1626,7 +1565,7 @@ function PointsGuide() {
           <div style={{ color: r.color, fontSize: 11.5, fontWeight: 700, textAlign: "right", whiteSpace: "nowrap" }}>{r.ex}</div>
         </div>
       ))}
-      <div style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${T.border}`, borderRadius: 16,
+      <div style={{ background: T.card2, border: `${T.bw} solid ${INK}`, borderRadius: 16,
         padding: "12px 14px", marginTop: 14, color: T.sub, fontSize: 12.5, lineHeight: 1.75 }}>
         <b style={{ color: T.text }}>Max:</b> 1000 pts per game, {GAMES.length * 1000} + bonus daily<br />
         <b style={{ color: T.text }}>ELO:</b> (pts − 480) ÷ 22 per duel · capped −15 to +28<br />
@@ -1652,14 +1591,13 @@ function Onboarding({ onDone }) {
   ];
 
   return (
-    <div style={{ padding: "64px 24px 36px", display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+    <div className="sd-scroll" style={{ padding: "56px 24px 36px", display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
       height: "100%", overflowY: "auto", boxSizing: "border-box" }}>
       {step === 0 && (
         <>
           <BrandMark size={82} />
-          <div style={{ fontSize: 36, fontWeight: 800, letterSpacing: 0, fontFamily: T.display,
-            background: "linear-gradient(90deg, #FFFFFF, #72E4FF 45%, #40E07F)",
-            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Skill Duels</div>
+          <div style={{ fontSize: 38, fontWeight: 900, letterSpacing: "-0.02em", fontFamily: T.display,
+            color: INK, textTransform: "uppercase", marginTop: 14 }}>Skill Duels</div>
           <div style={{ color: T.sub, fontSize: 15, textAlign: "center", marginBottom: 22 }}>
             One challenge a day.<br />One attempt. Who's the fastest?
           </div>
@@ -1670,19 +1608,18 @@ function Onboarding({ onDone }) {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, width: "100%", marginBottom: 18 }}>
             {AVATARS.map((a) => (
               <button key={a} className="pressable" onClick={() => { setAvatar(a); Sound.beep(700, 0.05); }}
-                style={{ padding: 7, borderRadius: 16, cursor: "pointer", display: "flex", justifyContent: "center",
-                  border: `2px solid ${avatar === a ? T.teal : "rgba(255,255,255,0.06)"}`,
-                  background: avatar === a ? "rgba(78,161,255,0.17)" : T.card, transition: "all 150ms",
-                  boxShadow: avatar === a ? `0 0 24px ${T.blue}26` : "none" }}>
+                style={{ padding: 7, borderRadius: 12, cursor: "pointer", display: "flex", justifyContent: "center",
+                  border: `${T.bw} solid ${INK}`, background: avatar === a ? T.yellow : T.card,
+                  boxShadow: avatar === a ? T.shadowMd : T.shadowSm, transition: "background 150ms" }}>
                 <Avatar id={a} size={54} />
               </button>
             ))}
           </div>
           <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, alignSelf: "flex-start", letterSpacing: 0.3, marginBottom: 8 }}>USERNAME</div>
           <input value={name} onChange={(e) => setName(e.target.value.slice(0, 16))} autoComplete="off"
-            style={{ width: "100%", padding: "15px 18px", borderRadius: 16, border: `1px solid ${T.border}`,
-              background: "rgba(255,255,255,0.07)", color: "#fff", fontSize: 17, fontFamily: T.font, outline: "none",
-              marginBottom: 24, boxSizing: "border-box", boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)" }} />
+            style={{ width: "100%", padding: "15px 18px", borderRadius: 12, border: `${T.bw} solid ${INK}`,
+              background: T.card, color: INK, fontSize: 17, fontWeight: 700, fontFamily: T.mono, outline: "none",
+              marginBottom: 24, boxSizing: "border-box", boxShadow: T.shadowSm }} />
           <BigButton onClick={() => name.trim() && next()}>Continue</BigButton>
           <div style={{ color: T.sub2, fontSize: 12, marginTop: 12 }}>No signup · play in 30 seconds</div>
         </>
@@ -1690,16 +1627,16 @@ function Onboarding({ onDone }) {
 
       {step === 1 && (
         <>
-          <div style={{ fontSize: 24, fontWeight: 700, fontFamily: T.display, margin: "8px 0 4px" }}>How it works</div>
+          <div style={{ fontSize: 26, fontWeight: 900, fontFamily: T.display, color: INK, textTransform: "uppercase", margin: "8px 0 4px" }}>How it works</div>
           <div style={{ color: T.sub, fontSize: 14, textAlign: "center", marginBottom: 14, maxWidth: 300 }}>Quick daily games, everyone on the same challenges — race for the top.</div>
           <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
             {GUIDE.map((g, i) => (
               <div key={g.title} className="enter" style={{ display: "flex", alignItems: "center", gap: 14,
-                background: T.card, border: `1px solid ${T.border}`, borderRadius: 20, padding: "14px 16px",
+                ...sticker(T.card, T.shadowSm), borderRadius: 14, padding: "14px 16px",
                 animationDelay: `${i * 90}ms` }}>
-                <div style={{ width: 46, height: 46, borderRadius: 15, display: "flex", alignItems: "center", justifyContent: "center",
-                  flexShrink: 0, background: `${g.color}1c`, border: `1px solid ${g.color}40` }}>
-                  <Icon name={g.icon} size={22} color={g.color} />
+                <div style={{ width: 44, height: 44, borderRadius: 11, display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0, background: g.color, border: `${T.bw} solid ${INK}` }}>
+                  <Icon name={g.icon} size={22} color={inkOn(g.color)} strokeWidth={2.2} />
                 </div>
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 700 }}>{g.title}</div>
@@ -1714,18 +1651,18 @@ function Onboarding({ onDone }) {
 
       {step === 2 && (
         <>
-          <div style={{ fontSize: 24, fontWeight: 700, fontFamily: T.display, margin: "8px 0 4px" }}>The games</div>
+          <div style={{ fontSize: 26, fontWeight: 900, fontFamily: T.display, color: INK, textTransform: "uppercase", margin: "8px 0 4px" }}>The games</div>
           <div style={{ color: T.sub, fontSize: 14, textAlign: "center", marginBottom: 14, maxWidth: 300 }}>
             {GAMES.length} quick challenges — a fresh set every midnight.
           </div>
           <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
             {GAMES.map((g, i) => (
               <div key={g.id} className="enter" style={{ display: "flex", alignItems: "center", gap: 12,
-                background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: "10px 14px",
+                ...sticker(T.card, T.shadowSm), borderRadius: 12, padding: "10px 14px",
                 animationDelay: `${i * 60}ms` }}>
-                <div style={{ width: 40, height: 40, borderRadius: 13, display: "flex", alignItems: "center", justifyContent: "center",
-                  flexShrink: 0, background: `${g.color}1c`, border: `1px solid ${g.color}40` }}>
-                  <Icon name={g.icon} size={20} color={g.color} />
+                <div style={{ width: 40, height: 40, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0, background: g.bg, border: `${T.bw} solid ${INK}` }}>
+                  <Icon name={g.icon} size={20} color={INK} strokeWidth={2.2} />
                 </div>
                 <div>
                   <div style={{ fontSize: 14.5, fontWeight: 700 }}>{g.name}</div>
@@ -1734,12 +1671,11 @@ function Onboarding({ onDone }) {
               </div>
             ))}
           </div>
-          <div style={{ width: "100%", background: "linear-gradient(180deg, rgba(255,214,10,0.08), transparent), " + T.card,
-            border: `1px solid ${T.border}`, borderRadius: 16, padding: "12px 15px", marginBottom: 18 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 700, marginBottom: 3 }}>
-              <Icon name="trophy" size={15} color={T.gold} /> Season Points
+          <div style={{ width: "100%", ...sticker(T.yellow, T.shadowSm), borderRadius: 12, padding: "12px 15px", marginBottom: 18 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 800, marginBottom: 3, color: INK }}>
+              <Icon name="trophy" size={15} color={INK} strokeWidth={2.4} /> Season Points
             </div>
-            <div style={{ color: T.sub, fontSize: 12.5, lineHeight: 1.45 }}>
+            <div style={{ color: "#5C5320", fontSize: 12.5, fontWeight: 600, lineHeight: 1.45 }}>
               Every game scores up to 1,000. They add up to one number — your Season Points — that drives ranking, duels & rewards. Resets monthly.
             </div>
           </div>
@@ -1750,7 +1686,7 @@ function Onboarding({ onDone }) {
       <div style={{ display: "flex", gap: 6, marginTop: 18 }}>
         {[0, 1, 2].map((i) => (
           <div key={i} style={{ width: i === step ? 22 : 7, height: 7, borderRadius: 4,
-            background: i === step ? T.blue : "rgba(255,255,255,0.2)", transition: "all 250ms" }} />
+            background: i === step ? INK : T.card2, border: `2px solid ${INK}`, transition: "all 250ms" }} />
         ))}
       </div>
     </div>
@@ -1759,432 +1695,432 @@ function Onboarding({ onDone }) {
 
 // ================= Shop =================
 function ShopScreen({ coins, owned, onBuy, onBuyCoins, onEquip, equipped }) {
+  const [shopTab, setShopTab] = useState("avatars");
+  // The featured drop is the priciest animated avatar — the one worth vaulting.
+  const featured = SHOP_ITEMS.find((it) => it.id === "av_volcano") || SHOP_ITEMS[SHOP_ITEMS.length - 1];
+  const avatars = SHOP_ITEMS.filter((it) => it.type === "avatar");
+  const frames = SHOP_ITEMS.filter((it) => it.type === "frame");
+
+  const seg = (id, label) => (
+    <button key={id} onClick={() => setShopTab(id)}
+      style={{ flex: 1, border: "none", cursor: "pointer", padding: 9, borderRadius: 8, fontFamily: T.display,
+        fontWeight: 800, fontSize: 12.5, textTransform: "uppercase",
+        background: shopTab === id ? INK : "transparent", color: shopTab === id ? T.yellow : T.sub2 }}>
+      {label}
+    </button>
+  );
+
+  const priceTag = (cost, light) => (
+    <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+      <span style={{ width: 12, height: 12, borderRadius: "50%", background: T.yellow,
+        border: `2px solid ${light ? "#fff" : INK}`, display: "inline-block", flexShrink: 0 }} />
+      {cost.toLocaleString()}
+    </span>
+  );
+
   return (
     <>
-      <H1 sub="Cosmetics only — style, never advantage" right={
-        <div style={{ display: "flex", alignItems: "center", gap: 6, background: T.card, border: `1px solid ${T.yellow}44`,
-          borderRadius: 999, padding: "7px 13px", flexShrink: 0 }}>
-          <Icon name="coin" size={16} color={T.yellow} />
-          <span style={{ fontWeight: 700, fontFamily: T.display, color: T.yellow, fontSize: 15 }}>{coins.toLocaleString()}</span>
+      {/* The section header already names the screen — this row just carries the balance. */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+        <div style={{ color: T.sub, fontSize: 12.5, fontWeight: 700 }}>Cosmetics only — style, never advantage</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, ...sticker(T.yellow, T.shadowSm),
+          borderRadius: 10, padding: "6px 11px", flexShrink: 0 }}>
+          <span style={{ width: 14, height: 14, borderRadius: "50%", background: "#fff", border: `2px solid ${INK}` }} />
+          <span style={{ fontWeight: 700, fontFamily: T.mono, color: INK, fontSize: 14 }}>{coins.toLocaleString()}</span>
         </div>
-      }>Shop</H1>
+      </div>
 
-      {/* Coin packs */}
-      <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, margin: "0 4px 10px", letterSpacing: 0.3 }}>GET COINS</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
-        {COIN_PACKS.map((pk) => (
-          <div key={pk.id} className="pressable" onClick={() => onBuyCoins(pk)}
-            style={{ boxSizing: "border-box", background: T.card, border: `1px solid ${pk.tag ? T.yellow + "55" : T.border2}`,
-              borderRadius: 20, padding: "18px 12px 14px", textAlign: "center", cursor: "pointer", position: "relative",
-              boxShadow: pk.tag ? `inset 0 1px 0 ${T.cardHi}, 0 6px 22px ${T.yellow}1e` : `inset 0 1px 0 ${T.cardHi}, ${T.shadowSm}` }}>
-            {pk.tag && (
-              <div style={{ position: "absolute", top: -8, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap",
-                background: "linear-gradient(90deg, #FFE087, #FFB800)", color: "#3a2a00", fontSize: 9.5, fontWeight: 800,
-                borderRadius: 999, padding: "3px 10px", letterSpacing: 0.3, boxShadow: `0 3px 10px ${T.yellow}55` }}>{pk.tag}</div>
-            )}
-            <div style={{ width: 46, height: 46, borderRadius: "50%", margin: "0 auto 8px", display: "flex", alignItems: "center", justifyContent: "center",
-              background: "linear-gradient(150deg, #FFE9A6, #FFB800)", boxShadow: `0 5px 16px ${T.yellow}55, inset 0 1px 1px rgba(255,255,255,0.6)` }}>
-              <Icon name="coin" size={24} color="#7A5200" strokeWidth={2.2} />
-            </div>
-            <div style={{ fontSize: 19, fontWeight: 700, fontFamily: T.display }}>{pk.coins.toLocaleString()}</div>
-            <div style={{ color: T.sub, fontSize: 12, marginBottom: 11 }}>coins</div>
-            <div style={{ background: `linear-gradient(180deg, rgba(255,255,255,0.22), transparent 45%), ${T.green}`, color: "#fff",
-              borderRadius: 11, padding: "8px 0", fontSize: 14, fontWeight: 700, fontFamily: T.display, boxShadow: `0 5px 16px ${T.green}44` }}>{pk.price}</div>
+      {/* Featured drop — the one thing above the fold */}
+      <div style={{ ...sticker(T.red, T.shadow), borderRadius: 16, padding: "16px 18px", marginBottom: 16,
+        display: "flex", alignItems: "center", gap: 15 }}>
+        <div style={{ flexShrink: 0, animation: "bob 1.7s ease-in-out infinite" }}>
+          <Avatar id={featured.glyph} size={62} />
+        </div>
+        <div style={{ flex: 1, color: "#fff", minWidth: 0 }}>
+          <div style={{ display: "inline-block", fontFamily: T.mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+            color: INK, background: T.yellow, border: `2px solid ${INK}`, padding: "2px 7px", borderRadius: 6 }}>
+            ⏳ VAULTS TONIGHT
           </div>
-        ))}
+          <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 18, marginTop: 8, textTransform: "uppercase",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{featured.name}</div>
+          <div style={{ fontSize: 11.5, color: "#FFDDD4", fontWeight: 700 }}>Legendary · animated</div>
+        </div>
       </div>
 
-      {/* Cosmetic items */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "0 4px 10px" }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: T.sub, letterSpacing: 0.3 }}>COSMETICS</span>
-        <span style={{ fontSize: 11, color: T.sub2 }}>Champion frames are earned, not sold</span>
+      {/* Tabs */}
+      <div style={{ display: "flex", ...sticker(T.card, T.shadowMd), borderRadius: 12, padding: 4, marginBottom: 16 }}>
+        {seg("avatars", "Avatars")}{seg("frames", "Frames")}{seg("coins", "Coins")}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 100 }}>
-        {SHOP_ITEMS.map((it) => {
-          const isOwned = owned.includes(it.id);
-          const isEquipped = equipped === it.id;
-          const canAfford = coins >= it.cost;
-          const rc = RARITY[it.rarity];
-          return (
-            <Card key={it.id} style={{ padding: 14, textAlign: "center", borderColor: `${rc}33` }}>
-              <div style={{ position: "relative", display: "flex", justifyContent: "center", marginBottom: 10, minHeight: 92, alignItems: "center" }}>
-                <div style={{ position: "absolute", width: 78, height: 78, borderRadius: "50%",
-                  background: `radial-gradient(closest-side, ${rc}${it.rarity === "legendary" ? "44" : it.rarity === "epic" ? "33" : "22"}, transparent 72%)`, pointerEvents: "none" }} />
-                {it.type === "frame"
-                  ? <FramedAvatar id={"knight"} size={72} frame={it.frame} />
-                  : <Avatar id={it.glyph} size={88} />}
-              </div>
-              <div style={{ fontSize: 14, fontWeight: 700 }}>{it.name}</div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: rc, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>{it.rarity}</div>
-              {isOwned ? (
-                <button className="pressable" onClick={() => onEquip(it.id)}
-                  style={{ width: "100%", padding: "9px 0", borderRadius: 12, border: `1px solid ${isEquipped ? T.green : T.border}`,
-                    background: isEquipped ? "rgba(48,209,88,0.15)" : T.card2, color: isEquipped ? T.green : "#fff",
-                    fontSize: 13, fontWeight: 700, fontFamily: T.font, cursor: "pointer",
+
+      {shopTab === "avatars" && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 110 }}>
+          {avatars.map((it) => {
+            const isOwned = owned.includes(it.id);
+            const isEquipped = equipped === it.id;
+            const canAfford = coins >= it.cost;
+            const animated = !!SPRITE_AVATARS[it.glyph];
+            const btnBg = isEquipped ? T.green : isOwned ? T.card2 : canAfford ? T.blue : T.card2;
+            return (
+              <div key={it.id} style={{ ...sticker(), borderRadius: 14, padding: 14, position: "relative",
+                display: "flex", flexDirection: "column", alignItems: "center", animation: "pop 300ms ease both" }}>
+                {animated && (
+                  <div style={{ position: "absolute", top: 11, right: 11, background: T.green, border: `2px solid ${INK}`,
+                    color: INK, fontSize: 9, fontWeight: 800, padding: "2px 5px", borderRadius: 5 }}>ANIM</div>
+                )}
+                <div style={{ margin: "4px 0 10px" }}><Avatar id={it.glyph} size={60} /></div>
+                <div style={{ fontFamily: T.mono, fontWeight: 700, fontSize: 14, color: T.text, textAlign: "center",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>{it.name}</div>
+                <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: INK,
+                  background: RARITY_BG[it.rarity], border: `2px solid ${INK}`, padding: "1px 6px", borderRadius: 5, marginTop: 5 }}>
+                  {it.rarity}
+                </div>
+                <button className="pressable" onClick={() => (isOwned ? onEquip(it.id) : canAfford && onBuy(it))}
+                  style={{ marginTop: 11, width: "100%", border: `${T.bw} solid ${INK}`, borderRadius: 9, padding: 8,
+                    fontFamily: T.mono, fontWeight: 700, fontSize: 13, background: btnBg, color: inkOn(btnBg),
+                    cursor: isOwned || canAfford ? "pointer" : "not-allowed",
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
-                  {isEquipped && <Icon name="check" size={13} color={T.green} strokeWidth={3} />}{isEquipped ? "Equipped" : "Equip"}
+                  {isEquipped ? "Equipped" : isOwned ? "Equip" : priceTag(it.cost, canAfford)}
                 </button>
-              ) : (
-                <button className="pressable" onClick={() => canAfford && onBuy(it)}
-                  style={{ width: "100%", padding: "9px 0", borderRadius: 12, border: "none", cursor: canAfford ? "pointer" : "not-allowed",
-                    background: canAfford ? "linear-gradient(180deg, rgba(255,255,255,0.12), transparent), " + T.yellow : T.card2,
-                    color: canAfford ? "#1a1a1a" : T.sub2, fontSize: 13, fontWeight: 700, fontFamily: T.font,
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5, opacity: canAfford ? 1 : 0.6 }}>
-                  {!canAfford && <Icon name="lock" size={12} color={T.sub2} />}
-                  <Icon name="coin" size={13} color={canAfford ? "#1a1a1a" : T.sub2} /> {it.cost.toLocaleString()}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {shopTab === "frames" && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 110 }}>
+          {frames.map((it) => {
+            const isOwned = owned.includes(it.id);
+            const isEquipped = equipped === it.id;
+            const canAfford = coins >= it.cost;
+            const btnBg = isEquipped ? T.green : isOwned ? T.card2 : canAfford ? T.blue : T.card2;
+            return (
+              <div key={it.id} style={{ ...sticker(), borderRadius: 14, padding: 15,
+                display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <FramedAvatar id="knight" size={54} frame={it.frame} />
+                <div style={{ fontFamily: T.mono, fontWeight: 700, fontSize: 14, color: T.text, marginTop: 10 }}>{it.name}</div>
+                <button className="pressable" onClick={() => (isOwned ? onEquip(it.id) : canAfford && onBuy(it))}
+                  style={{ marginTop: 10, width: "100%", border: `${T.bw} solid ${INK}`, borderRadius: 9, padding: 8,
+                    fontFamily: T.mono, fontWeight: 700, fontSize: 13, background: btnBg, color: inkOn(btnBg),
+                    cursor: isOwned || canAfford ? "pointer" : "not-allowed",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+                  {isEquipped ? "Equipped" : isOwned ? "Equip" : priceTag(it.cost, canAfford)}
                 </button>
-              )}
-            </Card>
-          );
-        })}
-      </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {shopTab === "coins" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 110 }}>
+          {COIN_PACKS.map((pk) => {
+            const best = pk.tag === "Best value";
+            return (
+              <div key={pk.id} style={{ display: "flex", alignItems: "center", gap: 14,
+                ...sticker(T.card, best ? T.shadow : T.shadowSm), borderRadius: 14, padding: "14px 16px", position: "relative" }}>
+                {pk.tag && (
+                  <div style={{ position: "absolute", top: -11, left: 16, background: best ? T.green : T.yellow,
+                    border: `${T.bw} solid ${INK}`, color: INK, fontSize: 9.5, fontWeight: 800, padding: "2px 7px",
+                    borderRadius: 6, textTransform: "uppercase" }}>{pk.tag}</div>
+                )}
+                <div style={{ width: 50, height: 50, borderRadius: 12, border: `${T.bw} solid ${INK}`, background: T.yellow,
+                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <Icon name="coin" size={26} color={INK} strokeWidth={2.2} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: T.mono, fontWeight: 700, fontSize: 16, color: T.text }}>{pk.coins.toLocaleString()} coins</div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: T.sub }}>one-time purchase</div>
+                </div>
+                <button className="pressable" onClick={() => onBuyCoins(pk)}
+                  style={{ border: `${T.bw} solid ${INK}`, cursor: "pointer", padding: "9px 16px", borderRadius: 10,
+                    fontFamily: T.display, fontWeight: 800, fontSize: 14, background: T.blue, color: "#fff" }}>
+                  {pk.price}
+                </button>
+              </div>
+            );
+          })}
+          <div style={{ ...sticker(T.card2, "none"), borderRadius: 12, padding: "12px 14px", color: T.sub,
+            fontSize: 12, fontWeight: 700, lineHeight: 1.5 }}>
+            Champion frames are earned by finishing top 3 — they are never sold.
+          </div>
+        </div>
+      )}
     </>
   );
 }
 
 // ================= Screens =================
-function TodayScreen({ playedGames, openGame, openPractice, onPractice, streak, totalPts, countdown, rewardClaimed, claimReward, onShare, onDuel, onHelp, balance, challengesLeft, onWatchAd, canWatchAd, adSlotsLeft }) {
+function TodayScreen({ playedGames, openGame, openPractice, onPractice, streak, totalPts, countdown, rewardClaimed, claimReward, onShare, onDuel, onHelp, balance, challengesLeft, onWatchAd, canWatchAd, adSlotsLeft, username, avatar, coins, elo }) {
   const playedCount = Object.keys(playedGames).length;
+  const total = GAMES.length;
+  const allDone = playedCount >= total;
+  const nextGame = GAMES.find((g) => !playedGames[g.id]) || GAMES[0];
+  const tier = tierOf(elo);
   const gamesRef = useRef(null);
-  const scrollToGames = () => gamesRef.current && gamesRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-  if (IS_C) {
-    const nextGame = GAMES.find((g) => !playedGames[g.id]) || GAMES[0];
-    return (
-      <div style={{ margin: "0 -4px 100px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 900, color: T.purple, letterSpacing: 1.2 }}>DAILY ARCADE</div>
-            <div style={{ fontSize: 34, fontWeight: 900, lineHeight: 0.98, fontFamily: T.display }}>Pick your run</div>
-          </div>
-          <button onClick={onHelp} className="pressable"
-            style={{ width: 46, height: 46, borderRadius: 18, border: `1px solid ${T.border}`, background: "#fff",
-              boxShadow: "0 8px 0 rgba(70,103,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Icon name="help" size={19} color={T.purple} />
-          </button>
-        </div>
 
-        <div style={{ position: "relative", borderRadius: 38, padding: "22px 20px 20px", marginBottom: 16,
-          background: "linear-gradient(145deg, #4667FF, #8E55FF 54%, #FF4F78)",
-          boxShadow: "0 12px 0 rgba(70,103,255,0.16), 0 28px 54px rgba(86,64,150,0.28)", overflow: "hidden" }}>
-          <div style={{ position: "absolute", right: -28, top: -28, width: 148, height: 148, borderRadius: "50%",
-            background: "rgba(255,255,255,0.15)" }} />
-          <div style={{ position: "absolute", right: 26, bottom: 18, width: 70, height: 70, borderRadius: 24,
-            border: "2px solid rgba(255,255,255,0.26)", transform: "rotate(12deg)" }} />
-          <div style={{ position: "relative", color: "#fff" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 800, opacity: 0.78 }}>Season Points</div>
-                <div style={{ fontSize: 48, fontWeight: 900, lineHeight: 0.95, fontFamily: T.display }}>{totalPts.toLocaleString()}</div>
-              </div>
-              <div style={{ minWidth: 72, textAlign: "center", background: "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.26)",
-                borderRadius: 22, padding: "10px 9px" }}>
-                <div style={{ fontSize: 24, fontWeight: 900, fontFamily: T.display }}>{playedCount}/{GAMES.length}</div>
-                <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.78 }}>DONE</div>
-              </div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-              {[
-                ["flame", T.yellow, streak, "streak"],
-                ["coin", T.yellow, balance, "balance"],
-                ["swords", "#fff", challengesLeft, "duels"],
-              ].map(([ic, col, val, lab]) => (
-                <div key={lab} style={{ background: "rgba(255,255,255,0.16)", border: "1px solid rgba(255,255,255,0.20)",
-                  borderRadius: 20, padding: "10px 8px" }}>
-                  <Icon name={ic} size={16} color={col} />
-                  <div style={{ fontSize: 18, fontWeight: 900, fontFamily: T.display, marginTop: 3 }}>{val}</div>
-                  <div style={{ fontSize: 10, fontWeight: 800, opacity: 0.72 }}>{lab}</div>
-                </div>
-              ))}
-            </div>
+  return (
+    <div style={{ paddingBottom: 130 }}>
+      {/* Identity + coins */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
+        ...sticker(T.card, T.shadowMd), borderRadius: 14, padding: "10px 13px", marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <Avatar id={avatar} size={38} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: T.mono, fontWeight: 700, fontSize: 15, color: T.text, lineHeight: 1,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{username}</div>
+            <div style={{ fontSize: 11, fontWeight: 800, color: T.sub2, textTransform: "uppercase" }}>{tier.name}</div>
           </div>
         </div>
+        <button onClick={onHelp} className="pressable"
+          style={{ display: "flex", alignItems: "center", gap: 6, background: T.yellow, border: `${T.bw} solid ${INK}`,
+            borderRadius: 10, padding: "6px 11px", cursor: "pointer", flexShrink: 0 }}>
+          <span style={{ width: 14, height: 14, borderRadius: "50%", background: "#fff", border: `2px solid ${INK}` }} />
+          <span style={{ fontFamily: T.mono, fontWeight: 700, fontSize: 14, color: INK }}>{coins.toLocaleString()}</span>
+        </button>
+      </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1.15fr 0.85fr", gap: 12, marginBottom: 16 }}>
-          <button className="pressable" onClick={() => openGame(nextGame.id)}
-            style={{ textAlign: "left", border: "none", borderRadius: 32, padding: 18, minHeight: 166, cursor: "pointer",
-              background: "#fff", boxShadow: `0 10px 0 ${nextGame.color}20, 0 20px 36px rgba(86,64,150,0.12)`, position: "relative", overflow: "hidden" }}>
-            <div style={{ position: "absolute", right: -20, bottom: -24, width: 120, height: 120, borderRadius: 38,
-              background: `${nextGame.color}18`, transform: "rotate(-12deg)" }} />
-            <div style={{ position: "relative" }}>
-              <div style={{ width: 58, height: 58, borderRadius: 24, background: `${nextGame.color}18`,
-                display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
-                <Icon name={nextGame.icon} size={29} color={nextGame.color} />
-              </div>
-              <div style={{ fontSize: 12, fontWeight: 900, color: nextGame.color, letterSpacing: 0.9 }}>NEXT RUN</div>
-              <div style={{ fontSize: 23, lineHeight: 1.02, fontWeight: 900, fontFamily: T.display, color: T.text }}>{nextGame.name}</div>
-              <div style={{ marginTop: 8, color: T.sub, fontSize: 12, fontWeight: 700 }}>{nextGame.desc}</div>
-            </div>
-          </button>
-
-          <div style={{ display: "grid", gap: 12 }}>
-            <button className="pressable" onClick={rewardClaimed ? undefined : claimReward}
-              style={{ border: "none", borderRadius: 28, padding: 14, background: rewardClaimed ? "#F2F0FA" : "#FFF5D6",
-                boxShadow: "0 8px 0 rgba(255,200,61,0.12)", textAlign: "left", cursor: rewardClaimed ? "default" : "pointer" }}>
-              <Icon name={rewardClaimed ? "check" : "gift"} size={24} color={rewardClaimed ? T.green : T.gold} />
-              <div style={{ fontSize: 14, fontWeight: 900, marginTop: 10, color: T.text }}>{rewardClaimed ? "Claimed" : "Gift"}</div>
-              <div style={{ color: T.sub, fontSize: 11, fontWeight: 700 }}>+50 points</div>
-            </button>
-            <button className="pressable" onClick={onPractice}
-              style={{ border: "none", borderRadius: 28, padding: 14, background: "#EFFFF8",
-                boxShadow: "0 8px 0 rgba(19,201,132,0.12)", textAlign: "left", cursor: "pointer" }}>
-              <Icon name="dumbbell" size={24} color={T.green} />
-              <div style={{ fontSize: 14, fontWeight: 900, marginTop: 10, color: T.text }}>Practice</div>
-              <div style={{ color: T.sub, fontSize: 11, fontWeight: 700 }}>free runs</div>
-            </button>
+      {/* Streak at risk — loudest thing on the screen until the run is done */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, ...sticker(allDone ? T.green : T.red, T.shadowMd),
+        borderRadius: 14, padding: "11px 14px", marginBottom: 14 }}>
+        <span style={{ fontSize: 24, display: "inline-block", animation: "flamef 1.5s ease-in-out infinite" }}>🔥</span>
+        <div style={{ flex: 1, lineHeight: 1.2 }}>
+          <div style={{ fontFamily: T.display, fontWeight: 800, fontSize: 16, color: allDone ? INK : "#fff" }}>
+            {streak}-DAY STREAK
           </div>
-        </div>
-
-        <div style={{ marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ fontSize: 15, fontWeight: 900 }}>Game shelf</div>
-          <button onClick={onDuel} className="pressable"
-            style={{ border: "none", borderRadius: 999, background: T.text, color: "#fff", padding: "8px 12px",
-              display: "flex", alignItems: "center", gap: 6, fontFamily: T.font, fontWeight: 900, fontSize: 12 }}>
-            <Icon name="swords" size={14} color="#fff" /> Challenge
-          </button>
-        </div>
-
-        <div style={{ display: "flex", gap: 12, overflowX: "auto", padding: "0 2px 18px", margin: "0 -2px" }}>
-          {GAMES.map((g, i) => {
-            const res = playedGames[g.id];
-            return (
-              <button key={g.id} className="pressable" onClick={() => openGame(g.id)}
-                style={{ minWidth: 154, border: "none", borderRadius: 30, padding: 14, textAlign: "left", cursor: "pointer",
-                  background: res ? `${g.color}18` : "#fff", boxShadow: `0 8px 0 ${g.color}18, 0 16px 30px rgba(86,64,150,0.10)` }}>
-                <div style={{ width: 48, height: 48, borderRadius: 20, background: `${g.color}1d`, display: "flex",
-                  alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
-                  <Icon name={g.icon} size={24} color={g.color} />
-                </div>
-                <div style={{ fontSize: 15, fontWeight: 900, color: T.text, lineHeight: 1.05 }}>{g.name}</div>
-                <div style={{ color: res ? g.color : T.sub, fontSize: 12, fontWeight: 800, marginTop: 8 }}>
-                  {res ? `+${res.pts} pts` : i === 0 ? "tap to play" : "locked for today?"}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: canWatchAd ? "1fr 1fr" : "1fr", gap: 10 }}>
-          {canWatchAd && (
-            <button className="pressable" onClick={onWatchAd}
-              style={{ border: "none", borderRadius: 24, padding: "13px 10px", background: "#EFFFF8", color: T.green,
-                fontWeight: 900, fontFamily: T.font }}>
-              <Icon name="playAd" size={16} color={T.green} /> +1 try ({adSlotsLeft})
-            </button>
-          )}
-          {playedCount > 0 && (
-            <button className="pressable" onClick={onShare}
-              style={{ border: "none", borderRadius: 24, padding: "13px 10px", background: "#EEF1FF", color: T.blue,
-                fontWeight: 900, fontFamily: T.font }}>
-              <Icon name="share" size={16} color={T.blue} /> Share score
-            </button>
-          )}
+          <div style={{ fontSize: 11.5, color: allDone ? "#083D28" : "#FFE1D8", fontWeight: 700 }}>
+            {allDone ? "Banked for today — nice." : `Resets in ${countdown.split(" ").slice(1).join(" ")} — don't lose it`}
+          </div>
         </div>
       </div>
-    );
-  }
-  return (
-    <>
-      <H1
-        right={
-          <button onClick={onHelp} className="pressable"
-            style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 999, width: 38, height: 38, flexShrink: 0,
-              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Icon name="help" size={18} color={T.sub} />
-          </button>
-        }
-        sub={<>Friday July 3 · new games at midnight</>}>
-        Today
-      </H1>
 
-      <Card style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 14,
-        background: IS_C
-          ? "radial-gradient(190px 130px at 8% 4%, rgba(70,103,255,0.16), transparent 64%), linear-gradient(135deg, rgba(255,255,255,0.96), rgba(240,246,255,0.88))"
-          : "radial-gradient(220px 140px at 12% 12%, rgba(114,228,255,0.24), transparent 64%), linear-gradient(135deg, rgba(78,161,255,0.18), rgba(64,224,127,0.09) 68%), rgba(21,24,34,0.82)",
-        borderColor: IS_C ? "rgba(70,103,255,0.14)" : "rgba(114,228,255,0.24)",
-        boxShadow: IS_C ? "0 12px 0 rgba(70,103,255,0.08), 0 20px 44px rgba(86,64,150,0.14)" : "0 18px 46px rgba(78,161,255,0.14), inset 0 1px 0 rgba(255,255,255,0.16)" }}>
-        <Ring size={96} stroke={10} progress={playedCount / GAMES.length} color={T.green} color2={T.teal}>
-          <div style={{ fontSize: 22, fontWeight: 700, fontFamily: T.display }}>{playedCount}/{GAMES.length}</div>
-        </Ring>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 4 }}>Daily Duels</div>
-          <div style={{ color: T.sub, fontSize: 13, marginBottom: 8 }}>Each game counts once per day</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Pill color={T.yellow}>{totalPts} points</Pill>
-            <Pill color={T.orange}><span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ display: "inline-flex", animation: "flamePulse 1.6s ease-in-out infinite" }}><Icon name="flame" size={12} color={T.orange} strokeWidth={2.4} /></span>{streak}</span></Pill>
-          </div>
+      {/* Hero: today's run */}
+      <div style={{ ...sticker(T.blue, T.shadow), borderRadius: 16, padding: 20, color: "#fff" }}>
+        <div style={{ fontFamily: T.mono, fontWeight: 700, fontSize: 12, letterSpacing: "0.14em", color: "#BFCBFF" }}>TODAY'S RUN</div>
+        <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 26, lineHeight: 1, marginTop: 6, textTransform: "uppercase" }}>
+          {allDone ? "Perfect day!" : playedCount ? `${total - playedCount} from a sweep` : "One shot each"}
         </div>
-      </Card>
+        <div style={{ fontSize: 13, color: "#D6DEFF", marginTop: 7, fontWeight: 600, lineHeight: 1.35 }}>
+          {allDone ? "New run drops at midnight." : playedCount ? "Finish the run to bank the streak." : "Beat today's field before the timer."}
+        </div>
+        <div style={{ display: "flex", gap: 6, marginTop: 15 }}>
+          {GAMES.map((g) => (
+            <div key={g.id} style={{ flex: 1, height: 14, borderRadius: 4, border: `${T.bw} solid ${INK}`,
+              background: playedGames[g.id] ? T.yellow : T.card2 }} />
+          ))}
+        </div>
+        {allDone ? (
+          <div style={{ marginTop: 16, width: "100%", padding: 15, borderRadius: 12, background: "rgba(255,255,255,0.14)",
+            border: `${T.bw} solid ${INK}`, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+            gap: 8, fontFamily: T.display, fontWeight: 800, fontSize: 14, textTransform: "uppercase" }}>
+            🌙 Back at midnight
+          </div>
+        ) : (
+          <button className="pressable" onClick={() => openGame(nextGame.id)}
+            style={{ marginTop: 16, width: "100%", border: `${T.bw} solid ${INK}`, cursor: "pointer", padding: 15,
+              borderRadius: 12, background: T.yellow, color: INK, boxShadow: T.shadowMd,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 9 }}>
+            <Icon name="playAd" size={19} color={INK} strokeWidth={2.4} />
+            <span style={{ fontFamily: T.display, fontWeight: 900, fontSize: 16, textTransform: "uppercase" }}>
+              {playedCount ? `Continue · ${total - playedCount} left` : "Start run"}
+            </span>
+          </button>
+        )}
+      </div>
 
-      {/* Primary CTA — jump straight to today's games */}
-      <BigButton color={T.green} style={{ marginBottom: 18 }} onClick={scrollToGames}>
-        <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 9 }}>
-          <Icon name="playAd" size={19} color="#fff" />
-          {playedCount >= GAMES.length ? "All done — see your scores" : playedCount > 0 ? "Keep playing" : "Play today's duels"}
-        </span>
-      </BigButton>
+      {/* Social proof */}
+      <div style={{ display: "flex", alignItems: "center", gap: 11, marginTop: 14,
+        ...sticker(T.green, T.shadowMd), borderRadius: 14, padding: "11px 14px" }}>
+        <div style={{ display: "flex" }}>
+          {ACTIVITY.map((a, i) => (
+            <div key={i} style={{ marginLeft: i ? -10 : 0 }}><Avatar id={a.avatar} size={26} /></div>
+          ))}
+        </div>
+        <div style={{ flex: 1, fontSize: 12.5, color: "#083D28", fontWeight: 800, lineHeight: 1.25 }}>
+          nikos.dev, SpirosGG & katerina__ already played. Catch up!
+        </div>
+      </div>
 
-      {/* Games first — the reason you opened the app */}
-      <div ref={gamesRef} style={{ scrollMarginTop: 12, fontSize: 13, fontWeight: 700, color: T.sub, margin: "0 4px 10px", letterSpacing: 0.3 }}>TODAY'S DUELS</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+      {/* Secondary actions */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 14 }}>
+        <button className="pressable" onClick={rewardClaimed ? undefined : claimReward}
+          style={{ cursor: rewardClaimed ? "default" : "pointer", ...sticker(T.card, T.shadowSm), borderRadius: 12,
+            padding: "12px 6px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 19 }}>{rewardClaimed ? "✅" : "🎁"}</span>
+          <span style={{ fontSize: 11, fontWeight: 800, color: T.text }}>{rewardClaimed ? "Claimed" : "Daily +50"}</span>
+        </button>
+        <button className="pressable" onClick={onPractice}
+          style={{ cursor: "pointer", ...sticker(T.card, T.shadowSm), borderRadius: 12,
+            padding: "12px 6px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 19 }}>🎯</span>
+          <span style={{ fontSize: 11, fontWeight: 800, color: T.text }}>Practice</span>
+        </button>
+        <button className="pressable" onClick={onDuel}
+          style={{ cursor: "pointer", ...sticker(INK, T.shadowSm), borderRadius: 12,
+            padding: "12px 6px", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 19 }}>⚔️</span>
+          <span style={{ fontSize: 11, fontWeight: 800, color: T.yellow }}>Duel · {challengesLeft}</span>
+        </button>
+      </div>
+
+      {/* The games */}
+      <div ref={gamesRef} style={{ fontFamily: T.display, fontWeight: 800, fontSize: 17, color: T.text,
+        textTransform: "uppercase", margin: "22px 2px 12px", scrollMarginTop: 12 }}>Or pick a game</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         {GAMES.map((g, gi) => {
           const res = playedGames[g.id];
           return (
-            <Card key={g.id} delay={120 + gi * 55} onClick={() => openGame(g.id)}
-              style={{ padding: 16, cursor: "pointer", borderColor: res ? `${g.color}55` : T.border }}>
-              <div style={{ width: 52, height: 52, borderRadius: 17, display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 26, marginBottom: 10, background: `linear-gradient(135deg, ${g.color}30, ${g.color}0d)`,
-                border: `1px solid ${g.color}40` }}><Icon name={g.icon} size={25} color={g.color} /></div>
-              <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 3 }}>{g.name}</div>
-              <div style={{ color: T.sub, fontSize: 12, marginBottom: 10, minHeight: 30 }}>{g.desc}</div>
+            <button key={g.id} className="pressable" onClick={() => openGame(g.id)}
+              style={{ textAlign: "left", cursor: "pointer", ...sticker(T.card, T.shadowMd), borderRadius: 14, padding: 13,
+                position: "relative", minHeight: 120, display: "flex", flexDirection: "column",
+                animation: "pop 300ms ease both", animationDelay: `${gi * 45}ms` }}>
+              <div style={{ width: 42, height: 42, borderRadius: 10, border: `${T.bw} solid ${INK}`, display: "flex",
+                alignItems: "center", justifyContent: "center", background: g.bg }}>
+                <Icon name={g.icon} size={22} color={INK} strokeWidth={2.2} />
+              </div>
+              {res && (
+                <div style={{ position: "absolute", top: 12, right: 12, width: 24, height: 24, borderRadius: 6,
+                  border: `${T.bw} solid ${INK}`, background: T.green, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Icon name="check" size={12} color={INK} strokeWidth={3.5} />
+                </div>
+              )}
+              <div style={{ fontFamily: T.mono, fontWeight: 700, fontSize: 14.5, color: T.text, marginTop: 11 }}>{g.name}</div>
+              <div style={{ fontSize: 11, color: T.sub2, fontWeight: 600, marginTop: 2, flex: 1 }}>{g.desc}</div>
               {res ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-start" }}>
-                  <Pill color={g.color}>{res.label}</Pill>
-                  <Pill color={T.yellow}>+{res.pts} pts</Pill>
+                <div style={{ marginTop: 9, display: "inline-flex", alignItems: "center", gap: 5, background: T.yellow,
+                  border: `2px solid ${INK}`, padding: "4px 8px", borderRadius: 7, width: "fit-content" }}>
+                  <span style={{ fontFamily: T.mono, fontWeight: 700, fontSize: 13, color: INK }}>{res.pts}</span>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: INK }}>PTS</span>
                 </div>
               ) : (
-                <Pill color={g.color}>Play now ›</Pill>
+                <div style={{ marginTop: 9, display: "inline-flex", alignItems: "center", gap: 4, color: T.blue }}>
+                  <span style={{ fontWeight: 800, fontSize: 12 }}>PLAY</span>
+                  <Icon name="chevron" size={14} color={T.blue} strokeWidth={3} />
+                </div>
               )}
-            </Card>
+            </button>
           );
         })}
       </div>
 
-      {/* Secondary actions — gathered into one compact row */}
-      <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, margin: "0 4px 10px", letterSpacing: 0.3 }}>MORE</div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
-        <button className="pressable" onClick={rewardClaimed ? undefined : claimReward}
-          style={{ textAlign: "left", cursor: rewardClaimed ? "default" : "pointer", padding: "12px 12px 13px", borderRadius: 18,
-            background: rewardClaimed ? T.card : "linear-gradient(160deg, rgba(255,214,10,0.14), rgba(28,28,30,1) 72%)",
-            border: rewardClaimed ? `1px solid ${T.border}` : `1px solid ${T.yellow}55` }}>
-          <div style={{ width: 38, height: 38, borderRadius: 13, display: "flex", alignItems: "center", justifyContent: "center",
-            background: "rgba(255,214,10,0.13)", border: "1px solid rgba(255,214,10,0.3)", marginBottom: 9 }}>
-            <Icon name={rewardClaimed ? "check" : "gift"} size={20} color={rewardClaimed ? T.green : T.yellow} />
-          </div>
-          <div style={{ fontSize: 13.5, fontWeight: 700 }}>{rewardClaimed ? "Claimed" : "Gift"}</div>
-          <div style={{ color: T.sub2, fontSize: 11 }}>+50 pts</div>
-        </button>
-        <button className="pressable" onClick={onPractice}
-          style={{ textAlign: "left", cursor: "pointer", padding: "12px 12px 13px", borderRadius: 18,
-            background: T.card, border: `1px solid ${T.green}44` }}>
-          <div style={{ width: 38, height: 38, borderRadius: 13, display: "flex", alignItems: "center", justifyContent: "center",
-            background: "rgba(48,209,88,0.12)", border: `1px solid ${T.green}40`, marginBottom: 9 }}>
-            <Icon name="dumbbell" size={20} color={T.green} strokeWidth={2.1} />
-          </div>
-          <div style={{ fontSize: 13.5, fontWeight: 700 }}>Practice</div>
-          <div style={{ color: T.sub2, fontSize: 11 }}>free runs</div>
-        </button>
-        <button className="pressable" onClick={onDuel}
-          style={{ textAlign: "left", cursor: "pointer", padding: "12px 12px 13px", borderRadius: 18,
-            background: T.card, border: `1px solid ${T.red}44` }}>
-          <div style={{ width: 38, height: 38, borderRadius: 13, display: "flex", alignItems: "center", justifyContent: "center",
-            background: "rgba(255,69,58,0.14)", border: "1px solid rgba(255,69,58,0.36)", marginBottom: 9 }}>
-            <Icon name="swords" size={20} color={T.red} />
-          </div>
-          <div style={{ fontSize: 13.5, fontWeight: 700 }}>Ranked</div>
-          <div style={{ color: challengesLeft > 0 ? T.green : T.sub2, fontSize: 11, fontWeight: 700 }}>{challengesLeft} {challengesLeft === 1 ? "try" : "tries"}</div>
-        </button>
+      {/* Extra tries / share */}
+      <div style={{ display: "grid", gridTemplateColumns: canWatchAd && playedCount > 0 ? "1fr 1fr" : "1fr", gap: 10, marginTop: 14 }}>
+        {canWatchAd && (
+          <button className="pressable" onClick={onWatchAd}
+            style={{ ...sticker(T.card, T.shadowSm), borderRadius: 12, padding: "12px 10px", cursor: "pointer",
+              color: T.text, fontWeight: 800, fontSize: 12.5, fontFamily: T.font,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+            <Icon name="playAd" size={16} color={T.green} strokeWidth={2.4} /> +1 try ({adSlotsLeft})
+          </button>
+        )}
+        {playedCount > 0 && (
+          <button className="pressable" onClick={onShare}
+            style={{ ...sticker(T.card, T.shadowSm), borderRadius: 12, padding: "12px 10px", cursor: "pointer",
+              color: T.text, fontWeight: 800, fontSize: 12.5, fontFamily: T.font,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+            <Icon name="share" size={16} color={T.blue} strokeWidth={2.4} /> Share score
+          </button>
+        )}
       </div>
 
-      {/* Watch-ad for extra challenge — respects daily cap */}
-      {canWatchAd ? (
-        <button className="pressable" onClick={onWatchAd}
-          style={{ width: "100%", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-            padding: "12px 0", marginBottom: 16, borderRadius: 16, cursor: "pointer",
-            background: "rgba(48,209,88,0.12)", border: `1px solid ${T.green}44`, color: T.green,
-            fontSize: 14, fontWeight: 700, fontFamily: T.font }}>
-          <Icon name="playAd" size={17} color={T.green} /> Watch ad · +1 challenge <span style={{ color: T.sub2, fontWeight: 600 }}>({adSlotsLeft} left)</span>
-        </button>
-      ) : (
-        <div style={{ width: "100%", boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-          padding: "12px 0", marginBottom: 16, borderRadius: 16, background: T.card, border: `1px solid ${T.border}`, color: T.sub2, fontSize: 13, fontWeight: 600 }}>
-          <Icon name="lock" size={14} color={T.sub2} /> Daily duel limit reached — resets at midnight
-        </div>
-      )}
-
-      {playedCount > 0 && (
-        <BigButton color={T.card2} style={{ boxShadow: "none", border: `1px solid ${T.border}`, marginBottom: 16 }} onClick={onShare}>
-          <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-            <Icon name="share" size={17} color="#fff" />Share today's score
-          </span>
-        </BigButton>
-      )}
-
-      <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, margin: "0 4px 10px", letterSpacing: 0.3 }}>ACTIVITY</div>
-      <Card delay={430} style={{ padding: 8, marginBottom: 100 }}>
+      {/* Live activity */}
+      <div style={{ fontFamily: T.display, fontWeight: 800, fontSize: 17, color: T.text,
+        textTransform: "uppercase", margin: "22px 2px 12px" }}>Live activity</div>
+      <div style={{ ...sticker(T.card, T.shadowMd), borderRadius: 14, overflow: "hidden" }}>
         {ACTIVITY.map((a, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 10px",
-            borderBottom: i < ACTIVITY.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
-            <Avatar id={a.avatar} size={38} />
-            <span style={{ flex: 1, fontSize: 13.5 }}>{a.text}</span>
-            <span style={{ color: T.sub2, fontSize: 11, whiteSpace: "nowrap" }}>{a.time}</span>
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 13px",
+            borderBottom: i < ACTIVITY.length - 1 ? `2px solid ${INK}` : "none" }}>
+            <div style={{ flexShrink: 0 }}><Avatar id={a.avatar} size={34} /></div>
+            <div style={{ flex: 1, lineHeight: 1.3, fontSize: 12.5, color: T.sub, fontWeight: 600 }}>{a.text}</div>
+            <div style={{ fontSize: 10, color: T.sub2, fontWeight: 800, flexShrink: 0 }}>{a.time}</div>
           </div>
         ))}
-      </Card>
-    </>
+      </div>
+    </div>
   );
 }
 
 function SeasonScreen({ seasonPts, username, avatar, countdown, seasonName, onRewards }) {
   const rows = [...BOTS.map((b) => ({ ...b })), { name: username, avatar, pts: seasonPts, me: true }].sort((a, b) => b.pts - a.pts);
   const myRank = rows.findIndex((r) => r.me) + 1;
+  const toTop = myRank > 3 ? rows[2].pts - seasonPts : 0;
   return (
-    <>
-      <H1 sub={<>{seasonName} Season · ends in <span style={{ color: T.yellow, fontWeight: 700 }}>{countdown}</span></>}>Season</H1>
+    <div style={{ paddingBottom: 130 }}>
+      {/* Season hero */}
+      <div style={{ ...sticker(T.purple, T.shadow), borderRadius: 16, padding: 18, color: "#fff",
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: T.mono, fontWeight: 700, fontSize: 11, letterSpacing: "0.12em", color: "#E4D9FF",
+            textTransform: "uppercase" }}>{seasonName} Season</div>
+          <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 22, marginTop: 4, textTransform: "uppercase" }}>
+            ENDS {countdown}
+          </div>
+        </div>
+        <span style={{ fontSize: 32, flexShrink: 0 }}>🏆</span>
+      </div>
 
-      {/* Season hero: your rank + season points */}
-      <Card style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 14,
-        background: IS_C
-          ? "radial-gradient(190px 130px at 6% 0%, rgba(255,200,61,0.22), transparent 64%), linear-gradient(135deg, rgba(255,255,255,0.96), rgba(255,249,231,0.88))"
-          : "radial-gradient(200px 140px at 6% 0%, rgba(255,230,109,0.24), transparent 64%), linear-gradient(135deg, rgba(255,214,10,0.16), rgba(200,117,255,0.08) 70%), rgba(21,24,34,0.86)",
-        borderColor: IS_C ? "rgba(244,183,47,0.18)" : "rgba(255,230,109,0.28)",
-        boxShadow: IS_C ? "0 12px 0 rgba(244,183,47,0.08), 0 20px 44px rgba(86,64,150,0.12)" : "0 18px 48px rgba(255,214,10,0.12), inset 0 1px 0 rgba(255,255,255,0.16)" }}>
-        <div style={{ textAlign: "center", minWidth: 62 }}>
-          <div style={{ fontSize: 30, fontWeight: 700, fontFamily: T.display, color: myRank <= 3 ? T.yellow : T.text }}>#{myRank}</div>
-          <div style={{ color: T.sub2, fontSize: 10 }}>your rank</div>
+      {/* Your standing */}
+      <div style={{ marginTop: 12, ...sticker(T.card, T.shadowMd), borderRadius: 14, padding: "14px 16px",
+        display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ textAlign: "center", flexShrink: 0 }}>
+          <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 24, color: myRank <= 3 ? T.red : T.blue }}>#{myRank}</div>
+          <div style={{ fontSize: 10, fontWeight: 800, color: T.sub2 }}>YOUR RANK</div>
         </div>
-        <div style={{ width: 1, height: 40, background: T.border }} />
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 24, fontWeight: 700, fontFamily: T.display, color: T.yellow }}>{seasonPts.toLocaleString()}</div>
-          <div style={{ color: T.sub, fontSize: 12 }}>Season Points</div>
+        <div style={{ width: 2.5, height: 34, background: INK, flexShrink: 0 }} />
+        <div style={{ flex: 1, fontSize: 13, color: T.text, fontWeight: 700, lineHeight: 1.3 }}>
+          {toTop > 0 ? (
+            <><span style={{ background: T.yellow, padding: "1px 4px", border: `2px solid ${INK}` }}>{toTop.toLocaleString()} pts</span> from the podium</>
+          ) : (
+            <>You're in the reward zone — <span style={{ background: T.green, padding: "1px 4px", border: `2px solid ${INK}` }}>hold it</span></>
+          )}
         </div>
-      </Card>
+      </div>
 
-      {/* Reward banner */}
-      <Card delay={70} onClick={onRewards}
-        style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16, padding: 14, cursor: "pointer",
-          borderColor: "rgba(255,214,10,0.3)" }}>
-        <div style={{ width: 50, height: 50, borderRadius: 17, display: "flex", alignItems: "center", justifyContent: "center",
-          flexShrink: 0, background: "rgba(255,214,10,0.13)", border: "1px solid rgba(255,214,10,0.35)" }}>
-          <Icon name="crown" size={24} color={T.yellow} />
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>Season Rewards</div>
-          <div style={{ color: T.sub, fontSize: 12 }}>Top 3 unlock exclusive frames, avatars & badges</div>
-        </div>
-        <Pill color={T.yellow}>View ›</Pill>
-      </Card>
+      {/* Top rewards */}
+      <div style={{ fontFamily: T.display, fontWeight: 800, fontSize: 17, color: T.text,
+        textTransform: "uppercase", margin: "22px 2px 12px" }}>Top rewards</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {SEASON_REWARDS.map((rw, i) => (
+          <button key={rw.place} className="pressable" onClick={onRewards}
+            style={{ display: "flex", alignItems: "center", gap: 13, textAlign: "left", cursor: "pointer",
+              ...sticker(T.card, T.shadowSm), borderRadius: 12, padding: "12px 14px" }}>
+            <div style={{ width: 36, height: 36, borderRadius: 9, border: `${T.bw} solid ${INK}`, display: "flex",
+              alignItems: "center", justifyContent: "center", fontFamily: T.display, fontWeight: 900, fontSize: 13,
+              color: INK, background: [T.yellow, "#D6B8FF", "#9CC3FF"][i], flexShrink: 0 }}>{rw.place}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 800, fontSize: 13.5, color: T.text }}>{rw.perks[0]}</div>
+              <div style={{ fontSize: 11.5, color: T.sub2, fontWeight: 600 }}>{rw.label} · {rw.badge}</div>
+            </div>
+            <div style={{ fontSize: 22, flexShrink: 0 }}>{["🥇", "🥈", "🥉"][i]}</div>
+          </button>
+        ))}
+      </div>
 
-      {/* Standings with reward markers on top 3 */}
-      <Card style={{ padding: 6, marginBottom: 100 }}>
+      {/* Standings */}
+      <div style={{ fontFamily: T.display, fontWeight: 800, fontSize: 17, color: T.text,
+        textTransform: "uppercase", margin: "22px 2px 12px" }}>Standings</div>
+      <div style={{ ...sticker(T.card, T.shadowMd), borderRadius: 14, overflow: "hidden" }}>
         {rows.map((r, i) => {
           const rw = i < 3 ? SEASON_REWARDS[i] : null;
           return (
-            <div key={r.name} style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 12px", borderRadius: 14,
-              background: r.me ? "rgba(10,132,255,0.15)" : rw ? `${rw.color}0e` : "transparent",
-              borderBottom: i < rows.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
-              <span style={{ width: 24, fontWeight: 700, fontSize: 14, color: rw ? rw.color : T.sub, textAlign: "center" }}>{i + 1}</span>
-              {rw ? <FramedAvatar id={r.avatar} size={30} frame={rw.frame} /> : <Avatar id={r.avatar} size={30} />}
-              <span style={{ flex: 1, fontWeight: r.me ? 800 : 600, fontSize: 14.5, color: r.me ? T.blue : T.text,
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {r.name} {r.me && "· you"}
-              </span>
-              {rw && <Icon name="crown" size={13} color={rw.color} />}
-              <span style={{ fontWeight: 700, fontSize: 13.5, color: rw ? rw.color : T.text, minWidth: 52, textAlign: "right", fontFamily: T.display }}>{r.pts.toLocaleString()}</span>
+            <div key={r.name} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px",
+              borderBottom: i < rows.length - 1 ? `2px solid ${INK}` : "none",
+              background: r.me ? "#FFF6D6" : "#fff" }}>
+              <div style={{ width: 26, textAlign: "center", fontFamily: T.display, fontWeight: 900, fontSize: 14,
+                color: rw ? T.red : r.me ? T.blue : T.sub2 }}>{i + 1}</div>
+              <div style={{ flexShrink: 0 }}>
+                {rw ? <FramedAvatar id={r.avatar} size={30} frame={rw.frame} /> : <Avatar id={r.avatar} size={30} />}
+              </div>
+              <div style={{ flex: 1, fontWeight: 800, fontSize: 13.5, color: T.text, overflow: "hidden",
+                textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}{r.me && " · you"}</div>
+              <div style={{ fontFamily: T.mono, fontWeight: 700, fontSize: 13.5, color: T.blue, flexShrink: 0 }}>
+                {r.pts.toLocaleString()}
+              </div>
             </div>
           );
         })}
-      </Card>
-    </>
+      </div>
+    </div>
   );
 }
 
@@ -2193,195 +2129,181 @@ function LeaderboardScreen({ userEntry, onChallenge }) {
   let rows = [...BOTS.map((b) => ({ ...b, me: false })), ...(userEntry ? [{ ...userEntry, me: true, friend: true }] : [])];
   if (filter === "friends") rows = rows.filter((r) => r.friend || r.me);
   rows.sort((a, b) => b.pts - a.pts);
+
+  const myIdx = rows.findIndex((r) => r.me);
+  const rival = myIdx > 0 ? rows[myIdx - 1] : null;
+  const gap = rival ? rival.pts - rows[myIdx].pts : 0;
+
   return (
-    <>
-      <H1 sub="This season · Season Points">Ranking</H1>
-      <div style={{ display: "flex", background: T.card, borderRadius: 12, padding: 3, marginBottom: 16, border: `1px solid ${T.border}` }}>
-        {[["global", "Global", "globe"], ["friends", "Friends", "users"]].map(([id, label, icon]) => (
+    <div style={{ paddingBottom: 130 }}>
+      {/* Scope switch */}
+      <div style={{ display: "flex", ...sticker(T.card, T.shadowMd), borderRadius: 12, padding: 4, marginBottom: 16 }}>
+        {[["global", "Global"], ["friends", "Friends"]].map(([id, label]) => (
           <button key={id} onClick={() => setFilter(id)}
-            style={{ flex: 1, padding: "9px 0", borderRadius: 10, border: "none",
-              background: filter === id ? T.card2 : "transparent", color: filter === id ? T.text : T.sub,
-              fontSize: 14, fontWeight: 700, fontFamily: T.font, cursor: "pointer", transition: "background 200ms",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-            <Icon name={icon} size={15} color={filter === id ? T.text : T.sub} strokeWidth={2.1} /> {label}
+            style={{ flex: 1, border: "none", cursor: "pointer", padding: 10, borderRadius: 8, fontFamily: T.display,
+              fontWeight: 800, fontSize: 13.5, textTransform: "uppercase",
+              background: filter === id ? INK : "transparent", color: filter === id ? T.yellow : T.sub2 }}>
+            {label}
           </button>
         ))}
       </div>
 
-      <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 20, alignItems: "flex-end" }}>
-        {rows.length >= 3 &&
-          [rows[1], rows[0], rows[2]].map((r, i) => {
-            const place = i === 1 ? 1 : i === 0 ? 2 : 3;
-            const mc = place === 1 ? "#FFC93C" : place === 2 ? "#C7CAD1" : "#E0965A";
-            const h = place === 1 ? 92 : place === 2 ? 68 : 54;
-            const av = place === 1 ? 54 : 44;
-            return (
-              <div key={r.name} style={{ textAlign: "center", width: place === 1 ? 104 : 92, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                <div style={{ position: "relative", display: "flex", justifyContent: "center", marginBottom: 6 }}>
-                  {place === 1 && (
-                    <div style={{ position: "absolute", top: -19, left: "50%", transform: "translateX(-50%) rotate(-8deg)", display: "flex", filter: `drop-shadow(0 2px 5px ${mc}88)` }}>
-                      <Icon name="crown" size={20} color={mc} strokeWidth={2.3} />
-                    </div>
-                  )}
-                  <div style={{ borderRadius: av * 0.28 + 5, padding: 2,
-                    border: `2.5px solid ${mc}`, boxShadow: `0 0 18px ${mc}55` }}>
-                    <Avatar id={r.avatar || "knight"} size={av} />
-                  </div>
-                </div>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: r.me ? T.blue : T.text, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</div>
-                <div style={{ color: mc, fontSize: 11.5, fontWeight: 700, fontFamily: T.display, marginBottom: 7 }}>{r.pts.toLocaleString()}</div>
-                <div style={{ width: "100%", height: h, borderRadius: "14px 14px 0 0", position: "relative",
-                  background: `linear-gradient(180deg, ${mc}38, ${mc}12 70%, ${mc}08)`,
-                  border: `1px solid ${mc}40`, borderBottom: "none",
-                  boxShadow: `inset 0 1px 0 ${mc}55` }}>
-                  <div style={{ position: "absolute", top: 10, left: 0, right: 0, textAlign: "center",
-                    fontSize: place === 1 ? 26 : 20, fontWeight: 800, fontFamily: T.display, color: mc, opacity: 0.95 }}>{place}</div>
-                </div>
-              </div>
-            );
-          })}
+      {/* Rival gap */}
+      <div style={{ ...sticker(T.yellow, T.shadowSm), borderRadius: 12, padding: "12px 14px", marginBottom: 14,
+        display: "flex", alignItems: "center", gap: 11 }}>
+        <span style={{ fontSize: 20 }}>🎯</span>
+        <div style={{ flex: 1, fontSize: 12.5, color: INK, fontWeight: 700, lineHeight: 1.25 }}>
+          {rival
+            ? `${gap.toLocaleString()} pts behind ${rival.name} at #${myIdx}. Close it today.`
+            : myIdx === 0
+            ? "You're #1. Everyone below is coming for you."
+            : "Play a duel to enter the ranking."}
+        </div>
       </div>
 
-      <Card style={{ padding: 6, marginBottom: 100 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {rows.map((r, i) => (
-          <div key={r.name}
-            style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 14,
-              background: r.me ? "rgba(10,132,255,0.15)" : "transparent",
-              borderBottom: i < rows.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
-            <span style={{ width: 22, color: r.me ? T.blue : T.sub, fontWeight: 700, fontSize: 14 }}>{i + 1}</span>
-            <Avatar id={r.avatar || "knight"} size={30} />
-            <span style={{ flex: 1, fontWeight: r.me ? 800 : 600, fontSize: 14.5, color: r.me ? T.blue : T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {r.name} {r.me && "· you"}
-            </span>
+          <div key={r.name} className="enter" style={{ display: "flex", alignItems: "center", gap: 9,
+            animationDelay: `${Math.min(i, 8) * 35}ms`,
+            ...sticker(r.me ? T.yellow : T.card, r.me ? T.shadow : T.shadowSm), borderRadius: 12, padding: "10px 11px" }}>
+            <div style={{ width: 20, flexShrink: 0, textAlign: "center", fontFamily: T.display, fontWeight: 900, fontSize: 15,
+              color: r.me ? INK : i < 3 ? T.red : T.sub2 }}>{i + 1}</div>
+            <div style={{ flexShrink: 0 }}><Avatar id={r.avatar || "knight"} size={34} /></div>
+            {/* flex:1 + minWidth:0 so the name is the only thing that gives way when space runs out */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 800, fontSize: 13.5, color: T.text, overflow: "hidden",
+                textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</div>
+              <div style={{ fontFamily: T.mono, fontWeight: 700, fontSize: 12.5, color: r.me ? INK : T.blue }}>
+                {r.pts.toLocaleString()}
+              </div>
+            </div>
             {!r.me && (
               <button className="pressable" onClick={() => onChallenge(r)}
-                style={{ border: `1px solid ${T.red}55`, background: `${T.red}18`, color: T.red, borderRadius: 999,
-                  padding: "5px 11px", fontSize: 11, fontWeight: 700, fontFamily: T.font, cursor: "pointer",
-                  display: "flex", alignItems: "center", gap: 4 }}>
-                <Icon name="swords" size={12} color={T.red} /> Bet
+                style={{ border: `2px solid ${INK}`, background: T.red, color: "#fff", borderRadius: 8,
+                  padding: "5px 9px", fontSize: 10.5, fontWeight: 800, fontFamily: T.font, cursor: "pointer", flexShrink: 0 }}>
+                BET
               </button>
             )}
-            <span style={{ fontWeight: 700, fontSize: 14, color: i < 3 ? ["#FFC93C", "#C7CAD1", "#E0965A"][i] : T.text, width: 44, textAlign: "right", fontFamily: T.display }}>{r.pts}</span>
           </div>
         ))}
-        {!userEntry && (
-          <div style={{ textAlign: "center", color: T.sub2, fontSize: 13, padding: 14 }}>Play a duel to enter the ranking</div>
-        )}
-      </Card>
-    </>
+      </div>
+    </div>
   );
 }
 
 function ProfileScreen({ elo, streak, playedGames, totalPts, duelRecord, openSettings, avatar, username, seasonPts, onEditAvatar, equippedFrame }) {
   const tier = tierOf(elo);
   const next = TIERS[TIERS.indexOf(TIERS.find((t) => t.name === tier.name)) + 1];
-  const prog = next ? (elo - tier.min) / (next.min - tier.min) : 1;
   const played = Object.keys(playedGames).length;
-  const week = [...WEEK_HISTORY, totalPts];
-  const max = Math.max(...week, 1);
-  const days = ["S", "M", "T", "W", "T", "F", "S"];
+  const badgeTarget = 30;
+  const badgeProg = Math.min(1, streak / badgeTarget);
   const achievements = [
-    { icon: "bolt", color: T.blue, name: "First Duel", desc: "Play your first duel", done: played >= 1 },
-    { icon: "target", color: T.orange, name: "Full House", desc: "Play all games in one day", done: played >= GAMES.length },
-    { icon: "swords", color: T.red, name: "Duelist", desc: "Win a 1v1 duel", done: duelRecord.w >= 1 },
-    { icon: "flame", color: T.orange, name: "Fire Week", desc: "7 day streak", done: streak >= 7 },
-    { icon: "gem", color: T.purple, name: "Diamond Mind", desc: "Reach 1700 ELO", done: elo >= 1700 },
+    { emoji: "⚡", name: "First Duel", desc: "Play your first duel", done: played >= 1 },
+    { emoji: "🎯", name: "Full House", desc: "Play all games in one day", done: played >= GAMES.length },
+    { emoji: "⚔️", name: "Duelist", desc: "Win a 1v1 duel", done: duelRecord.w >= 1 },
+    { emoji: "🔥", name: "Fire Week", desc: "7 day streak", done: streak >= 7 },
+    { emoji: "💎", name: "Diamond Mind", desc: "Reach 1700 ELO", done: elo >= 1700 },
+  ];
+  const stats = [
+    { emoji: "🔥", label: "Day streak", value: String(streak) },
+    { emoji: "🎮", label: "Games today", value: `${played}/${GAMES.length}` },
+    { emoji: "⭐", label: "Season points", value: seasonPts.toLocaleString() },
+    { emoji: "⚔️", label: "Duel record", value: `${duelRecord.w}-${duelRecord.l}` },
   ];
   return (
-    <>
-      <H1 right={
-        <button onClick={openSettings} className="pressable"
-          style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 999, width: 38, height: 38, flexShrink: 0,
-            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Icon name="sliders" size={17} color="#fff" />
-        </button>
-      }>Profile</H1>
-
-      <Card style={{ textAlign: "center", marginBottom: 14 }}>
+    <div style={{ paddingBottom: 130 }}>
+      {/* Identity */}
+      <div style={{ ...sticker(T.card, T.shadow), borderRadius: 16, padding: 20,
+        display: "flex", flexDirection: "column", alignItems: "center" }}>
         <button onClick={onEditAvatar} className="pressable"
-          style={{ background: "none", border: "none", cursor: "pointer", display: "inline-flex", position: "relative",
-            justifyContent: "center", marginBottom: 8, padding: 0 }}>
-          {equippedFrame
-            ? <FramedAvatar id={avatar} size={96} frame={equippedFrame} />
-            : <Avatar id={avatar} size={96} />}
-          <span style={{ position: "absolute", bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14,
-            background: T.blue, border: "3px solid #1C1C1E", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Icon name="sliders" size={13} color="#fff" strokeWidth={2.4} />
+          style={{ width: 96, height: 96, borderRadius: "50%", padding: 5, border: `${T.bw} solid ${INK}`,
+            background: T.yellow, display: "flex", alignItems: "center", justifyContent: "center",
+            position: "relative", cursor: "pointer", boxShadow: "none" }}>
+          {equippedFrame ? <FramedAvatar id={avatar} size={72} frame={equippedFrame} /> : <Avatar id={avatar} size={78} />}
+          <span style={{ position: "absolute", bottom: -2, right: -2, width: 30, height: 30, borderRadius: 8,
+            background: INK, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Icon name="sliders" size={14} color={T.yellow} strokeWidth={2.4} />
           </span>
         </button>
-        <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 12 }}>{username}</div>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
-          <Ring size={130} stroke={12} progress={prog} color={tier.color} color2={T.purple}>
-            <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: -1, fontFamily: T.display }}>{elo}</div>
-            <div style={{ fontSize: 11, color: T.sub, fontWeight: 600 }}>ELO</div>
-          </Ring>
+        <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 22, color: T.text, marginTop: 12,
+          textTransform: "uppercase" }}>{username}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 6 }}>
+          <span style={{ background: T.purple, border: `${T.bw} solid ${INK}`, color: "#fff", fontSize: 11,
+            fontWeight: 800, letterSpacing: "0.04em", padding: "3px 9px", borderRadius: 7, textTransform: "uppercase" }}>
+            {tier.name}
+          </span>
+          <span style={{ fontSize: 12.5, color: T.sub2, fontWeight: 700 }}>{elo} ELO</span>
         </div>
-        <div style={{ fontSize: 20, fontWeight: 800, color: tier.color }}>{tier.name}</div>
-        {next && <div style={{ color: T.sub, fontSize: 13, marginTop: 4 }}>{next.min - elo} points to {next.name}</div>}
-      </Card>
+        {next && (
+          <div style={{ fontSize: 12, color: T.sub, fontWeight: 700, marginTop: 6 }}>
+            {next.min - elo} ELO to {next.name}
+          </div>
+        )}
+      </div>
 
-      <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
-        {[["flame", T.orange, streak, "streak"], ["swords", T.blue, `${duelRecord.w}-${duelRecord.l}`, "duel W-L"], ["trophy", T.gold, seasonPts.toLocaleString(), "season pts"]].map(([ic, col, val, lab]) => (
-          <Card key={lab} style={{ flex: 1, textAlign: "center", padding: "16px 10px" }}>
-            <div style={{ width: 34, height: 34, borderRadius: 11, margin: "0 auto 8px", display: "flex", alignItems: "center", justifyContent: "center",
-              background: `${col}1f`, border: `1px solid ${col}33` }}>
-              <Icon name={ic} size={18} color={col} strokeWidth={2.2} />
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 14 }}>
+        {stats.map((s) => (
+          <div key={s.label} style={{ ...sticker(T.card, T.shadowSm), borderRadius: 12, padding: 15 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 17 }}>{s.emoji}</span>
+              <span style={{ fontSize: 11, fontWeight: 800, color: T.sub2, textTransform: "uppercase" }}>{s.label}</span>
             </div>
-            <div style={{ fontSize: 19, fontWeight: 800, fontFamily: T.display }}>{val}</div>
-            <div style={{ color: T.sub, fontSize: 11.5 }}>{lab}</div>
-          </Card>
+            <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 26, color: T.text, marginTop: 6 }}>{s.value}</div>
+          </div>
         ))}
       </div>
 
-      <Card style={{ marginBottom: 14, padding: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: T.sub, letterSpacing: 0.3 }}>YOUR WEEK</span>
-          <span style={{ fontSize: 11, color: T.sub2, fontWeight: 600 }}>points / day</span>
+      {/* Next badge */}
+      <div style={{ marginTop: 14, ...sticker(T.card, T.shadowSm), borderRadius: 12, padding: "15px 16px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: T.text }}>Next badge · 30-day streak</span>
+          <span style={{ fontSize: 12, fontWeight: 800, color: T.sub2 }}>{streak}/{badgeTarget}</span>
         </div>
-        {(() => {
-          const hi = Math.max(...week, 1);
-          const lo = Math.min(...week);
-          const span = Math.max(hi - lo, 1);
-          const fmt = (v) => (v >= 1000 ? (v / 1000).toFixed(1).replace(/\.0$/, "") + "k" : v);
-          return (
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 7, height: 108 }}>
-              {week.map((v, i) => {
-                const today = i === week.length - 1;
-                return (
-                  <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, height: "100%", justifyContent: "flex-end" }}>
-                    <div style={{ fontSize: 9.5, fontWeight: 700, color: today ? T.blue : T.sub2, fontFamily: T.display }}>{fmt(v)}</div>
-                    <div style={{ width: "100%", borderRadius: "7px 7px 3px 3px", height: `${22 + 78 * ((v - lo) / span)}%`,
-                      background: today ? "linear-gradient(180deg, #64D2FF, #0A84FF)" : "rgba(10,132,255,0.28)",
-                      boxShadow: today ? "0 4px 14px rgba(10,132,255,0.45)" : "none",
-                      transition: "height 700ms cubic-bezier(.22,1,.36,1)" }} />
-                    <div style={{ fontSize: 11, color: today ? T.blue : T.sub2, fontWeight: 700 }}>{days[i]}</div>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()}
-      </Card>
+        <div style={{ height: 12, borderRadius: 5, border: `${T.bw} solid ${INK}`, background: T.bg,
+          marginTop: 9, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${badgeProg * 100}%`, background: T.red,
+            transition: "width 700ms cubic-bezier(.22,1,.36,1)" }} />
+        </div>
+      </div>
 
-      <Card style={{ marginBottom: 100, padding: 14 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, marginBottom: 6, letterSpacing: 0.3 }}>ACHIEVEMENTS</div>
-        {achievements.map((a) => (
-          <div key={a.name} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0", opacity: a.done ? 1 : 0.45 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 12, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-              background: a.done ? `${a.color}1f` : "rgba(255,255,255,0.04)", border: `1px solid ${a.done ? a.color + "3a" : T.border2}` }}>
-              <Icon name={a.icon} size={20} color={a.done ? a.color : T.sub2} strokeWidth={2.2} />
+      {/* Achievements */}
+      <div style={{ fontFamily: T.display, fontWeight: 800, fontSize: 17, color: T.text,
+        textTransform: "uppercase", margin: "22px 2px 12px" }}>Achievements</div>
+      <div style={{ ...sticker(T.card, T.shadowMd), borderRadius: 14, overflow: "hidden" }}>
+        {achievements.map((a, i) => (
+          <div key={a.name} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px",
+            borderBottom: i < achievements.length - 1 ? `2px solid ${INK}` : "none", opacity: a.done ? 1 : 0.45 }}>
+            <div style={{ width: 38, height: 38, borderRadius: 10, border: `${T.bw} solid ${INK}`, flexShrink: 0,
+              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18,
+              background: a.done ? T.yellow : T.card2 }}>{a.emoji}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: T.text }}>{a.name}</div>
+              <div style={{ color: T.sub2, fontSize: 11.5, fontWeight: 600 }}>{a.desc}</div>
             </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>{a.name}</div>
-              <div style={{ color: T.sub, fontSize: 12 }}>{a.desc}</div>
-            </div>
-            {a.done
-              ? <span style={{ width: 22, height: 22, borderRadius: 11, background: T.green, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name="check" size={13} color="#fff" strokeWidth={3} /></span>
-              : <Icon name="lock" size={15} color={T.sub2} />}
+            {a.done ? (
+              <span style={{ width: 24, height: 24, borderRadius: 6, border: `${T.bw} solid ${INK}`, background: T.green,
+                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Icon name="check" size={12} color={INK} strokeWidth={3.5} />
+              </span>
+            ) : (
+              <Icon name="lock" size={15} color={T.sub2} />
+            )}
           </div>
         ))}
-      </Card>
-    </>
+      </div>
+
+      {/* Settings */}
+      <div style={{ fontFamily: T.display, fontWeight: 800, fontSize: 17, color: T.text,
+        textTransform: "uppercase", margin: "22px 2px 12px" }}>Settings</div>
+      <button className="pressable" onClick={openSettings}
+        style={{ width: "100%", textAlign: "left", cursor: "pointer", ...sticker(T.card, T.shadowMd), borderRadius: 14,
+          display: "flex", alignItems: "center", gap: 12, padding: "14px 16px" }}>
+        <span style={{ fontSize: 16, width: 22 }}>⚙️</span>
+        <span style={{ flex: 1, fontWeight: 800, fontSize: 14, color: T.text }}>Account & preferences</span>
+        <Icon name="chevron" size={17} color={T.sub2} strokeWidth={3} />
+      </button>
+    </div>
   );
 }
 
@@ -2393,6 +2315,7 @@ export default function App() {
   const [soundOn, setSoundOn] = useState(true);
 
   const [tab, setTab] = useState("today");
+  const [menuOpen, setMenuOpen] = useState(false); // orb nav sheet
   const [activeGame, setActiveGame] = useState(null);
   const [practiceMode, setPracticeMode] = useState(false);
   const [gameLive, setGameLive] = useState(false); // true once a scored daily game is in progress → no bailing
@@ -2401,7 +2324,7 @@ export default function App() {
   const [streak, setStreak] = useState(6);
   const [toast, setToast] = useState(null);
   const [rewardClaimed, setRewardClaimed] = useState(false);
-  const [rewardAnim, setRewardAnim] = useState(false);
+  const [reveal, setReveal] = useState(null); // post-run / claim panel payload
   const [bonusPts, setBonusPts] = useState(0);
   const [duelXP, setDuelXP] = useState(0);
   const [duelRecord, setDuelRecord] = useState({ w: 0, l: 0 });
@@ -2465,8 +2388,10 @@ export default function App() {
     setTimeout(() => setToast(null), 3200);
   };
 
+  // Where you'd land on the season board with a given point total.
+  const rankAt = (pts) => [...BOTS.map((b) => b.pts), pts].sort((a, b) => b - a).indexOf(pts) + 1;
+
   const finish = (raw, pts, label) => {
-    const g = GAMES.find((x) => x.id === activeGame);
     if (practiceMode) {
       showToast(`Practice: ${label} (doesn't count)`);
       setActiveGame(null);
@@ -2474,11 +2399,21 @@ export default function App() {
     }
     if (!playedGames[activeGame]) {
       const delta = Math.max(-15, Math.min(28, Math.round((pts - 480) / 22)));
+      const firstOfDay = Object.keys(playedGames).length === 0;
       setPlayedGames((p) => ({ ...p, [activeGame]: { raw, pts, label } }));
       setCoins((c) => c + Math.round(pts / 10)); // earn coins from performance
       setElo((e) => e + delta);
-      if (Object.keys(playedGames).length === 0) setStreak((s) => s + 1);
-      showToast(`${label} · +${pts} pts · ELO ${delta >= 0 ? "+" : ""}${delta}`);
+      if (firstOfDay) setStreak((s) => s + 1);
+      // Bank the run behind the reveal panel instead of a toast that scrolls past.
+      setReveal({
+        headline: "Run complete",
+        result: label,
+        score: pts,
+        pct: Math.max(12, Math.min(99, Math.round(pts / 10))), // games score out of 1000
+        rankUp: Math.max(0, rankAt(seasonPts) - rankAt(seasonPts + pts)),
+        streak: streak + (firstOfDay ? 1 : 0),
+        drop: rollDrop(),
+      });
     } else {
       showToast(`Practice: ${label} (doesn't count)`);
     }
@@ -2486,15 +2421,23 @@ export default function App() {
   };
 
   const claimReward = () => {
-    if (rewardClaimed || rewardAnim) return;
-    setRewardAnim(true);
-  };
-
-  const rewardDone = () => {
-    setRewardAnim(false);
+    if (rewardClaimed || reveal) return;
     setRewardClaimed(true);
     setBonusPts(50);
-    showToast("+50 bonus points!");
+    setReveal({
+      headline: "Daily gift",
+      score: 50,
+      pct: null, // no field to compare against — this one is just handed to you
+      rankUp: Math.max(0, rankAt(seasonPts) - rankAt(seasonPts + 50)),
+      streak,
+      drop: rollDrop(),
+    });
+  };
+
+  // Applies whatever the drop turned out to be, then closes the panel.
+  const collectReveal = (drop) => {
+    if (drop && drop.coins) setCoins((c) => c + drop.coins);
+    setReveal(null);
   };
 
   const duelDone = (won) => {
@@ -2621,13 +2564,17 @@ export default function App() {
   const isReplay = activeGame && playedGames[activeGame];
   const friends = BOTS.filter((b) => b.friend);
 
-  const tabs = [
-    ["today", "Today", "bolt"],
-    ["season", "Season", "crown"],
-    ["leaderboard", "Ranking", "trophy"],
-    ["shop", "Shop", "bag"],
-    ["profile", "Profile", "user"],
+  // Sections in orbit order — the header arrows and the orb menu both walk this list.
+  const SECTIONS = [
+    ["today", "Today", T.yellow, "bolt"],
+    ["season", "Season", T.purple, "crown"],
+    ["leaderboard", "Ranking", T.green, "trophy"],
+    ["shop", "Shop", T.red, "bag"],
+    ["profile", "Profile", T.blue, "user"],
   ];
+  const secIdx = Math.max(0, SECTIONS.findIndex((s) => s[0] === tab));
+  const section = SECTIONS[secIdx];
+  const step = (dir) => setTab(SECTIONS[(secIdx + dir + SECTIONS.length) % SECTIONS.length][0]);
 
   // Single responsive layout: the app always fills its container edge-to-edge.
   // On wide screens the content column is centered and capped, but never wider
@@ -2637,36 +2584,11 @@ export default function App() {
     const inner = (
       <div style={{ width: "100%", height: "100%", position: "relative",
         overflow: "hidden", background: T.bg, touchAction: "pan-y" }}>
-        <div style={{ position: "absolute", inset: 0, pointerEvents: "none",
-          background: IS_C
-            ? "radial-gradient(320px 240px at -12% 2%, rgba(70,103,255,0.24), transparent 64%), radial-gradient(300px 260px at 110% 10%, rgba(255,79,120,0.22), transparent 62%), radial-gradient(360px 280px at 48% 108%, rgba(19,201,132,0.16), transparent 64%)"
-            : IS_B
-            ? "radial-gradient(520px 300px at 0% -8%, rgba(255,224,113,0.18), transparent 58%), radial-gradient(440px 330px at 102% 18%, rgba(255,91,98,0.16), transparent 60%), radial-gradient(360px 280px at 50% 112%, rgba(104,240,255,0.12), transparent 62%)"
-            : "radial-gradient(520px 360px at 16% -8%, rgba(78,161,255,0.26), transparent 58%), radial-gradient(420px 340px at 96% 10%, rgba(200,117,255,0.18), transparent 60%), radial-gradient(360px 320px at 50% 106%, rgba(64,224,127,0.13), transparent 62%)",
-          animation: IS_B || IS_C ? "none" : "auroraDrift 8s ease-in-out infinite" }} />
-        {IS_B && (
-          <div style={{ position: "absolute", inset: 0, pointerEvents: "none", opacity: 0.16,
-            backgroundImage: "linear-gradient(rgba(255,224,113,0.7) 1px, transparent 1px), linear-gradient(90deg, rgba(104,240,255,0.45) 1px, transparent 1px)",
-            backgroundSize: "32px 32px", maskImage: "linear-gradient(to bottom, transparent, #000 18%, #000 72%, transparent)" }} />
-        )}
-        {IS_C && (
-          <div style={{ position: "absolute", inset: 0, pointerEvents: "none", opacity: 0.34,
-            backgroundImage: "radial-gradient(circle at 14px 14px, rgba(70,103,255,0.22) 0 3px, transparent 4px), linear-gradient(135deg, transparent 0 46%, rgba(255,255,255,0.58) 47% 53%, transparent 54%)",
-            backgroundSize: "42px 42px, 84px 84px" }} />
-        )}
-        <div style={{ position: "absolute", inset: 0, pointerEvents: "none",
-          background: IS_C
-            ? "linear-gradient(180deg, rgba(255,255,255,0.56), rgba(255,255,255,0.08) 42%, rgba(70,103,255,0.06) 100%)"
-            : IS_B
-            ? "linear-gradient(180deg, rgba(255,224,113,0.035), transparent 18%, rgba(0,0,0,0.24) 100%)"
-            : "linear-gradient(180deg, rgba(255,255,255,0.035), transparent 16%, rgba(0,0,0,0.16) 100%)" }} />
         {framed && (
-          <div style={{ position: "absolute", top: 9, left: "50%", transform: "translateX(-50%)", width: 105, height: 30,
-            background: "#000", borderRadius: 999, zIndex: 60 }} />
+          <div style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)", width: 112, height: 30,
+            background: INK, borderRadius: "0 0 18px 18px", zIndex: 60 }} />
         )}
         {children}
-        <div style={{ position: "absolute", bottom: 7, left: "50%", transform: "translateX(-50%)", width: 128, height: 5,
-          borderRadius: 999, background: "rgba(255,255,255,0.28)", zIndex: 500, pointerEvents: "none" }} />
       </div>
     );
 
@@ -2679,28 +2601,16 @@ export default function App() {
         </div>
       );
 
-    // Desktop: centered iPhone device mock with correct aspect ratio.
+    // Desktop: centered iPhone device mock on a workshop-tape backdrop.
     return (
       <div style={{ minHeight: "100vh",
-        background: IS_C
-          ? "radial-gradient(900px 660px at 28% -80px, rgba(70,103,255,0.22), transparent 62%), radial-gradient(800px 560px at 82% 8%, rgba(255,79,120,0.18), transparent 60%), #F6F3FF"
-          : IS_B
-          ? "radial-gradient(1100px 720px at 35% -120px, rgba(255,224,113,0.18), transparent 62%), radial-gradient(900px 620px at 80% 10%, rgba(255,91,98,0.12), transparent 60%), #07080D"
-          : "radial-gradient(1100px 720px at 35% -120px, rgba(78,161,255,0.20), transparent 62%), radial-gradient(900px 620px at 80% 10%, rgba(200,117,255,0.13), transparent 60%), #05060A",
+        background: "repeating-linear-gradient(45deg, #141210 0 22px, #171512 22px 44px)",
         display: "flex", alignItems: "center", justifyContent: "center", fontFamily: T.font, color: T.text,
-        WebkitFontSmoothing: "antialiased", padding: 16, boxSizing: "border-box" }}>
+        WebkitFontSmoothing: "antialiased", padding: 24, boxSizing: "border-box" }}>
         <FontImport />
-        <div style={{ height: "min(844px, 96vh)", aspectRatio: "390 / 844", padding: 12, borderRadius: 56,
-          background: IS_C ? "linear-gradient(150deg, #FFFFFF, #DAD2FF 42%, #A9F2E4)" : IS_B ? "linear-gradient(150deg, #6B5B34, #1E1A19 42%, #08090D)" : "linear-gradient(150deg, #5A6070, #1B1D26 42%, #090A0F)",
-          boxShadow: IS_C
-            ? "0 44px 110px rgba(86,64,150,0.28), inset 0 1px 2px rgba(255,255,255,0.9)"
-            : IS_B
-            ? "0 44px 120px rgba(0,0,0,0.88), 0 0 80px rgba(255,91,98,0.10), inset 0 1px 2px rgba(255,255,255,0.24)"
-            : "0 44px 120px rgba(0,0,0,0.86), 0 0 80px rgba(78,161,255,0.12), inset 0 1px 2px rgba(255,255,255,0.24)" }}>
-          <div style={{ width: "100%", height: "100%", borderRadius: 45, overflow: "hidden",
-            border: "1px solid rgba(255,255,255,0.05)", background: T.bg }}>
-            {inner}
-          </div>
+        <div style={{ height: "min(844px, 94vh)", aspectRatio: "390 / 844", borderRadius: 46, background: T.bg,
+          overflow: "hidden", boxShadow: `0 40px 100px -20px rgba(0,0,0,0.7), 0 0 0 11px ${INK}, 0 0 0 13px #2c2a26` }}>
+          {inner}
         </div>
       </div>
     );
@@ -2718,44 +2628,63 @@ export default function App() {
       />
     );
 
-  const glow = { today: T.blue, season: T.yellow, leaderboard: T.orange, shop: T.green, profile: T.purple }[tab];
+  const inGame = !!activeGame || !!duelOpp;
 
   return shell(
     <>
-      <div style={{ position: "absolute", inset: 0, overflowY: "auto", overflowX: "hidden", paddingBottom: 100, maxWidth: "100%" }}>
-      {/* ambient tab-colored glow — clamped to container width */}
-      <div style={{ position: "absolute", top: -130, left: 0, right: 0, height: 340, maxWidth: "100%",
-        background: `radial-gradient(closest-side at 50% 50%, ${glow}20, transparent 72%)`, pointerEvents: "none", transition: "background 400ms" }} />
-
-      {/* iOS status bar — only on the desktop device mock. On real phones we
-          defer to the OS status bar and just reserve safe-area space. */}
+      {/* Status bar space — the desktop mock draws a fake one, phones defer to the OS. */}
       {framed ? (
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 26px 0",
-          fontSize: 15, fontWeight: 700, fontVariantNumeric: "tabular-nums", position: "relative" }}>
-          <span>9:41</span>
-          <span style={{ display: "flex", gap: 7, alignItems: "center" }}>
-            <svg width="18" height="12" viewBox="0 0 18 12" fill="none">
-              <rect x="0" y="7" width="3" height="5" rx="1" fill="#fff" />
-              <rect x="5" y="4.5" width="3" height="7.5" rx="1" fill="#fff" />
-              <rect x="10" y="2" width="3" height="10" rx="1" fill="#fff" />
-              <rect x="15" y="0" width="3" height="12" rx="1" fill="#fff" opacity="0.35" />
+        <div style={{ height: 52, flex: "none", display: "flex", alignItems: "flex-end", justifyContent: "space-between",
+          padding: "0 26px 6px", position: "relative", zIndex: 5 }}>
+          <span style={{ fontFamily: T.mono, fontWeight: 700, fontSize: 15, color: INK }}>9:41</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, color: INK }}>
+            <svg width="17" height="12" viewBox="0 0 17 12" fill="currentColor">
+              <rect x="0" y="7" width="3" height="5" rx="1" />
+              <rect x="4.5" y="4.5" width="3" height="7.5" rx="1" />
+              <rect x="9" y="2" width="3" height="10" rx="1" />
+              <rect x="13.5" y="0" width="3" height="12" rx="1" opacity="0.35" />
             </svg>
-            <svg width="26" height="12" viewBox="0 0 26 12" fill="none">
-              <rect x="0.5" y="0.5" width="21" height="11" rx="3.5" stroke="#fff" strokeOpacity="0.4" />
-              <rect x="2" y="2" width="15" height="8" rx="2" fill="#fff" />
-              <rect x="23" y="4" width="2.5" height="4" rx="1" fill="#fff" opacity="0.4" />
+            <svg width="22" height="12" viewBox="0 0 24 12" fill="none">
+              <rect x="1" y="1" width="19" height="10" rx="3" stroke="currentColor" strokeOpacity="0.5" strokeWidth="1.4" />
+              <rect x="2.5" y="2.5" width="14" height="7" rx="1.5" fill="currentColor" />
+              <rect x="21" y="4" width="2" height="4" rx="1" fill="currentColor" fillOpacity="0.5" />
             </svg>
-          </span>
+          </div>
         </div>
       ) : (
-        <div style={{ height: "max(12px, env(safe-area-inset-top))" }} />
+        <div style={{ height: "max(14px, env(safe-area-inset-top))" }} />
       )}
 
-      <div style={{ padding: "10px 18px 0", position: "relative" }}>
+      {/* Bold section header — name, color chip, and prev/next through the sections. */}
+      {!inGame && (
+        <div style={{ flex: "none", padding: "4px 20px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
+            <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 33, letterSpacing: "-0.02em", color: INK,
+              textTransform: "uppercase", lineHeight: 0.9 }}>{section[1]}</div>
+            <div style={{ width: 14, height: 14, background: section[2], border: `2.5px solid ${INK}`,
+              borderRadius: 3, flexShrink: 0 }} />
+          </div>
+          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+            {[["chevronLeft", -1], ["chevron", 1]].map(([ic, dir]) => (
+              <button key={ic} className="pressable" onClick={() => step(dir)}
+                style={{ width: 38, height: 38, cursor: "pointer", ...sticker(T.card, `3px 3px 0 ${INK}`),
+                  borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Icon name={ic} size={18} color={INK} strokeWidth={3} />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="sd-scroll" style={{ position: "absolute", top: framed ? (inGame ? 52 : 102) : (inGame ? 14 : 64),
+        left: 0, right: 0, bottom: 0, overflowY: "auto", overflowX: "hidden", maxWidth: "100%" }}>
+      <div style={{ padding: "2px 20px 0", position: "relative" }}>
         {duelOpp ? (
           <>
             <button onClick={() => setDuelOpp(null)}
-              style={{ background: "none", border: "none", color: T.blue, fontSize: 16, fontWeight: 600, fontFamily: T.font, cursor: "pointer", padding: "6px 0 14px" }}>
+              className="pressable"
+              style={{ ...sticker(T.card, `3px 3px 0 ${INK}`), borderRadius: 10, color: INK, fontSize: 13,
+                fontWeight: 800, fontFamily: T.font, cursor: "pointer", padding: "7px 13px", margin: "0 0 14px" }}>
               ‹ Cancel
             </button>
             <DuelScreen opponent={duelOpp} onDone={duelDone} avatar={avatar} username={username} stake={duelStake} gameId={duelGame} />
@@ -2764,27 +2693,34 @@ export default function App() {
           <>
             {(practiceMode || isReplay || !gameLive) ? (
               <button onClick={() => setActiveGame(null)}
-                style={{ background: "none", border: "none", color: T.blue, fontSize: 16, fontWeight: 600, fontFamily: T.font, cursor: "pointer", padding: "6px 0 14px" }}>
+                className="pressable"
+              style={{ ...sticker(T.card, `3px 3px 0 ${INK}`), borderRadius: 10, color: INK, fontSize: 13,
+                fontWeight: 800, fontFamily: T.font, cursor: "pointer", padding: "7px 13px", margin: "0 0 14px" }}>
                 ‹ Back
               </button>
             ) : (
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, color: T.sub2, fontSize: 13, fontWeight: 600, padding: "6px 0 14px" }}>
-                <Icon name="lock" size={13} color={T.sub2} /> Attempt in progress
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, ...sticker(T.card2, "none"),
+                borderRadius: 8, color: T.sub, fontSize: 12, fontWeight: 800, padding: "6px 11px", margin: "0 0 14px" }}>
+                <Icon name="lock" size={13} color={T.sub} /> Attempt in progress
               </div>
             )}
-            <h1 style={{ fontSize: 24, fontWeight: 700, margin: "0 0 4px", fontFamily: T.display,
+            <h1 style={{ fontSize: 28, fontWeight: 900, margin: "0 0 8px", fontFamily: T.display, color: INK,
+              textTransform: "uppercase", letterSpacing: "-0.02em", lineHeight: 0.95,
               display: "flex", alignItems: "center", gap: 10 }}>
-              <Icon name={game.icon} size={23} color={game.color} /> {game.name}
+              <span style={{ width: 36, height: 36, borderRadius: 9, border: `${T.bw} solid ${INK}`, background: game.bg,
+                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Icon name={game.icon} size={20} color={INK} strokeWidth={2.2} />
+              </span>
+              {game.name}
             </h1>
             {practiceMode || isReplay ? (
               <div style={{ display: "inline-flex", alignItems: "center", gap: 7, marginBottom: 18,
-                background: "rgba(48,209,88,0.14)", border: `1px solid ${T.green}44`, borderRadius: 999,
-                padding: "5px 13px", color: T.green, fontSize: 13, fontWeight: 700 }}>
-                <Icon name="dumbbell" size={14} color={T.green} strokeWidth={2.2} />
+                ...sticker(T.green, "none"), borderRadius: 8, padding: "5px 11px", color: INK, fontSize: 12.5, fontWeight: 800 }}>
+                <Icon name="dumbbell" size={14} color={INK} strokeWidth={2.4} />
                 Practice — doesn't count
               </div>
             ) : (
-              <div style={{ color: T.sub, fontSize: 14, marginBottom: 18 }}>One attempt — make it count!</div>
+              <div style={{ color: T.sub, fontSize: 13, marginBottom: 18, fontWeight: 700 }}>One attempt — make it count!</div>
             )}
             {activeGame === "draw" && <DuelDrawGame onFinish={finish} onBegin={() => setGameLive(true)} />}
             {activeGame === "bullseye" && <BullseyeGame onFinish={finish} onBegin={() => setGameLive(true)} />}
@@ -2802,7 +2738,8 @@ export default function App() {
                 onPractice={() => setPracticeOpen(true)}
                 countdown={countdown} rewardClaimed={rewardClaimed} claimReward={claimReward}
                 onShare={() => { setShareOpen(true); setCopied(false); }} onDuel={() => setPickerOpen(true)}
-                onHelp={() => setHelpOpen(true)} balance={balance} challengesLeft={challengesLeft} onWatchAd={() => watchAdDirect()} canWatchAd={canWatchAd} adSlotsLeft={MAX_AD_DUELS - adDuels} />
+                onHelp={() => setTab("shop")} balance={balance} challengesLeft={challengesLeft} onWatchAd={() => watchAdDirect()} canWatchAd={canWatchAd} adSlotsLeft={MAX_AD_DUELS - adDuels}
+                username={username} avatar={avatar} coins={coins} elo={elo} />
             )}
             {tab === "season" && <SeasonScreen seasonPts={seasonPts} username={username} avatar={avatar}
                 countdown={countdown} seasonName={SEASON_NAME} onRewards={() => setRewardsOpen(true)} />}
@@ -2821,15 +2758,14 @@ export default function App() {
       </div>
 
       {/* Reward opening animation */}
-      {rewardAnim && <RewardOverlay onDone={rewardDone} />}
+      {reveal && <RevealOverlay {...reveal} onCollect={collectReveal} />}
 
-      {/* Toast */}
+      {/* Toast — sits just above the orb so it never covers the run button */}
       {toast && (
-        <div style={{ position: "absolute", top: 48, left: "50%", transform: "translate(-50%, 0)",
-          animation: "toastIn 320ms cubic-bezier(.22,1,.36,1)", maxWidth: "88%", boxSizing: "border-box",
-          background: "rgba(44,44,46,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
-          border: `1px solid ${T.border}`, borderRadius: 999, padding: "10px 20px", fontSize: 14, fontWeight: 600,
-          zIndex: 200, boxShadow: "0 10px 40px rgba(0,0,0,0.5)", textAlign: "center" }}>
+        <div style={{ position: "absolute", bottom: 104, left: "50%", transform: "translateX(-50%)",
+          animation: "toastIn 250ms ease both", maxWidth: "88%", boxSizing: "border-box",
+          background: INK, color: T.yellow, borderRadius: 11, padding: "11px 18px",
+          fontFamily: T.mono, fontWeight: 700, fontSize: 13, zIndex: 200, textAlign: "center" }}>
           {toast}
         </div>
       )}
@@ -2842,7 +2778,7 @@ export default function App() {
           {BOTS.map((f) => (
             <div key={f.name} className="pressable" onClick={() => { setPickerOpen(false); openStake(f); }}
               style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 10px", borderRadius: 14, cursor: "pointer",
-                borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                borderBottom: `2px solid ${INK}` }}>
               <Avatar id={f.avatar} size={44} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: 15, display: "flex", alignItems: "center", gap: 6 }}>{f.name} {f.friend && <Icon name="users" size={12} color={T.sub2} strokeWidth={2.1} />}</div>
@@ -2871,15 +2807,15 @@ export default function App() {
               <button key={g.id} className="pressable" onClick={() => setPickGame(g.id)}
                 style={{ boxSizing: "border-box", display: "flex", alignItems: "center", gap: 10, padding: "12px",
                   borderRadius: 14, cursor: "pointer", textAlign: "left",
-                  border: `2px solid ${pickGame === g.id ? g.color : "transparent"}`,
-                  background: pickGame === g.id ? `${g.color}1c` : T.card }}>
-                <Icon name={g.icon} size={22} color={g.color} />
+                  border: `${T.bw} solid ${INK}`, boxShadow: pickGame === g.id ? T.shadowMd : T.shadowSm,
+                  background: pickGame === g.id ? g.bg : T.card }}>
+                <Icon name={g.icon} size={22} color={inkOn(g.color)} strokeWidth={2.2} />
                 <span style={{ fontSize: 13.5, fontWeight: 700 }}>{g.name}</span>
               </button>
             ))}
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `1px solid ${T.border}`,
+          <div style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `${T.bw} solid ${INK}`,
             borderRadius: 16, padding: "12px 14px", marginBottom: 16 }}>
             <Avatar id={avatar} size={40} />
             <div style={{ flex: 1 }}>
@@ -2894,12 +2830,11 @@ export default function App() {
               return (
                 <button key={amt} className="pressable" disabled={!afford}
                   onClick={() => afford && confirmStake(stakeFor, amt, pickGame)}
-                  style={{ boxSizing: "border-box", padding: "18px 0", borderRadius: 18, cursor: afford ? "pointer" : "not-allowed",
-                    border: `1px solid ${afford ? T.red + "55" : T.border}`, fontFamily: T.display,
-                    background: afford ? "linear-gradient(180deg, rgba(255,255,255,0.1), transparent), rgba(255,69,58,0.14)" : T.card,
-                    color: afford ? "#fff" : T.sub2, opacity: afford ? 1 : 0.5 }}>
-                  <div style={{ fontSize: 22, fontWeight: 700 }}>{amt}</div>
-                  <div style={{ fontSize: 11, color: afford ? T.sub : T.sub2 }}>points</div>
+                  style={{ boxSizing: "border-box", padding: "16px 0", borderRadius: 12, cursor: afford ? "pointer" : "not-allowed",
+                    ...sticker(afford ? T.red : T.card2, afford ? T.shadowMd : "none"), fontFamily: T.display,
+                    color: afford ? "#fff" : T.sub2, opacity: afford ? 1 : 0.6 }}>
+                  <div style={{ fontSize: 22, fontWeight: 900 }}>{amt}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: afford ? "#FFDDD4" : T.sub2 }}>points</div>
                 </button>
               );
             })}
@@ -2955,7 +2890,7 @@ export default function App() {
                   const done = !!playedGames[g.id];
                   return (
                     <div key={g.id} style={{ width: 34, height: 34, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center",
-                      background: done ? `linear-gradient(150deg, ${g.color}, ${g.color}bb)` : "rgba(255,255,255,0.06)",
+                      background: done ? `linear-gradient(150deg, ${g.color}, ${g.color}bb)` : T.card2,
                       border: `1px solid ${done ? g.color : "rgba(255,255,255,0.12)"}`,
                       boxShadow: done ? `0 4px 12px ${g.color}55` : "none" }}>
                       <Icon name={g.icon} size={17} color={done ? "#fff" : "rgba(255,255,255,0.28)"} />
@@ -2979,7 +2914,7 @@ export default function App() {
             </span>
           </BigButton>
           <BigButton color={copied ? T.green : T.card2} onClick={doCopy}
-            style={{ boxShadow: "none", border: copied ? "none" : `1px solid ${T.border}` }}>
+            style={{ boxShadow: T.shadowSm }}>
             {copied ? "✓ Copied!" : "Copy text instead"}
           </BigButton>
         </Sheet>
@@ -2998,10 +2933,10 @@ export default function App() {
           {GAMES.map((g) => (
             <div key={g.id} className="pressable" onClick={() => { setPracticeOpen(false); setGameLive(false); setPracticeMode(true); setActiveGame(g.id); }}
               style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 10px", borderRadius: 14, cursor: "pointer",
-                borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                borderBottom: `2px solid ${INK}` }}>
               <div style={{ width: 46, height: 46, borderRadius: 15, display: "flex", alignItems: "center", justifyContent: "center",
-                flexShrink: 0, background: `${g.color}1c`, border: `1px solid ${g.color}40` }}>
-                <Icon name={g.icon} size={22} color={g.color} />
+                flexShrink: 0, background: g.color, border: `${T.bw} solid ${INK}` }}>
+                <Icon name={g.icon} size={22} color={inkOn(g.color)} strokeWidth={2.2} />
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: 15 }}>{g.name}</div>
@@ -3018,7 +2953,7 @@ export default function App() {
         <Sheet onClose={() => setAdPromptFor(null)}>
           <div style={{ textAlign: "center", padding: "6px 0" }}>
             <div style={{ width: 64, height: 64, borderRadius: 20, margin: "0 auto 14px", display: "flex", alignItems: "center", justifyContent: "center",
-              background: "rgba(48,209,88,0.14)", border: `1px solid ${T.green}44` }}>
+              background: "#D6F5E7", border: `1px solid ${T.green}44` }}>
               <Icon name="playAd" size={32} color={T.green} />
             </div>
             <div style={{ fontSize: 20, fontWeight: 700, fontFamily: T.display, marginBottom: 6 }}>Out of challenges</div>
@@ -3027,7 +2962,7 @@ export default function App() {
             </div>
             <BigButton color={T.green} onClick={watchAdForDuel}>
               <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                <Icon name="playAd" size={18} color="#fff" /> Watch ad · +1 challenge
+                <Icon name="playAd" size={18} color={INK} /> Watch ad · +1 challenge
               </span>
             </BigButton>
             <button onClick={() => setAdPromptFor(null)}
@@ -3041,7 +2976,7 @@ export default function App() {
 
       {/* Ad playing overlay */}
       {adPlaying && (
-        <div style={{ position: "absolute", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.9)",
+        <div style={{ position: "absolute", inset: 0, zIndex: 400, background: "rgba(20,18,15,0.92)",
           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, overflow: "hidden" }}>
           <div style={{ fontSize: 12, color: T.sub2, position: "absolute", top: 20, letterSpacing: 1 }}>ADVERTISEMENT</div>
           <div style={{ width: 60, height: 60, borderRadius: "50%", border: `3px solid ${T.green}`, borderTopColor: "transparent",
@@ -3062,7 +2997,7 @@ export default function App() {
           </div>
           {SEASON_REWARDS.map((rw) => (
             <div key={rw.place} style={{ display: "flex", gap: 14, padding: "14px 4px",
-              borderBottom: rw.place < 3 ? "1px solid rgba(255,255,255,0.06)" : "none" }}>
+              borderBottom: rw.place < 3 ? `2px solid ${INK}` : "none" }}>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 66 }}>
                 <FramedAvatar id={rw.avatar} size={48} frame={rw.frame} />
                 <div style={{ fontSize: 11, fontWeight: 700, color: rw.color }}>#{rw.place} {rw.label}</div>
@@ -3077,12 +3012,12 @@ export default function App() {
               </div>
             </div>
           ))}
-          <div style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${T.border}`, borderRadius: 16,
+          <div style={{ background: T.card2, border: `${T.bw} solid ${INK}`, borderRadius: 16,
             padding: "12px 14px", marginTop: 14, color: T.sub, fontSize: 12.5, lineHeight: 1.7 }}>
             Season resets on the 1st of each month. Points go to zero, but your unlocked cosmetics are yours to keep.
           </div>
           <div style={{ height: 14 }} />
-          <BigButton color={T.yellow} style={{ color: "#1a1a1a" }} onClick={() => setRewardsOpen(false)}>Got it</BigButton>
+          <BigButton color={T.yellow} onClick={() => setRewardsOpen(false)}>Got it</BigButton>
         </Sheet>
       )}
 
@@ -3105,8 +3040,8 @@ export default function App() {
 
           {/* Big live preview of the current selection */}
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, marginBottom: 20,
-            padding: "18px 0", background: "linear-gradient(180deg, rgba(10,132,255,0.10), transparent)",
-            borderRadius: 20, border: `1px solid ${T.border}` }}>
+            padding: "18px 0", background: T.card,
+            borderRadius: 20, border: `${T.bw} solid ${INK}` }}>
             {equippedFrameId
               ? <FramedAvatar id={avatar} size={128} frame={equippedFrameId} />
               : <Avatar id={avatar} size={128} />}
@@ -3119,8 +3054,8 @@ export default function App() {
               <button key={a} className="pressable" onClick={() => { setAvatar(a); Sound.beep(700, 0.05); }}
                 style={{ padding: 7, borderRadius: 16, cursor: "pointer", display: "flex", justifyContent: "center",
                   boxSizing: "border-box", width: "100%", minWidth: 0, aspectRatio: "1",
-                  border: `2px solid ${avatar === a ? T.blue : "transparent"}`,
-                  background: avatar === a ? "rgba(10,132,255,0.15)" : T.card }}>
+                  border: `${T.bw} solid ${INK}`, boxShadow: avatar === a ? T.shadowMd : T.shadowSm,
+                  background: avatar === a ? T.yellow : T.card }}>
                 <Avatar id={a} size={54} />
               </button>
             ))}
@@ -3130,7 +3065,7 @@ export default function App() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 8 }}>
             <button className="pressable" onClick={() => setEquipped(null)}
               style={{ padding: 6, borderRadius: 16, cursor: "pointer", background: T.card, boxSizing: "border-box",
-                border: `2px solid ${!equippedFrameId ? T.blue : "transparent"}`, display: "flex", flexDirection: "column",
+                border: `${T.bw} solid ${INK}`, boxShadow: !equippedFrameId ? T.shadowMd : T.shadowSm, display: "flex", flexDirection: "column",
                 alignItems: "center", gap: 4, width: "100%" }}>
               <Avatar id={avatar} size={44} />
               <span style={{ fontSize: 11, color: T.sub }}>None</span>
@@ -3138,7 +3073,7 @@ export default function App() {
             {SHOP_ITEMS.filter((it) => it.type === "frame" && owned.includes(it.id)).map((it) => (
               <button key={it.id} className="pressable" onClick={() => setEquipped(it.id)}
                 style={{ padding: 6, borderRadius: 16, cursor: "pointer", background: T.card, boxSizing: "border-box",
-                  border: `2px solid ${equipped === it.id ? T.blue : "transparent"}`, display: "flex", flexDirection: "column",
+                  border: `${T.bw} solid ${INK}`, boxShadow: equipped === it.id ? T.shadowMd : T.shadowSm, display: "flex", flexDirection: "column",
                   alignItems: "center", gap: 4, width: "100%" }}>
                 <FramedAvatar id={avatar} size={40} frame={it.frame} />
                 <span style={{ fontSize: 11, color: T.sub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>{it.name}</span>
@@ -3162,62 +3097,81 @@ export default function App() {
             {avatarOptions.map((a) => (
               <button key={a} className="pressable" onClick={() => setAvatar(a)}
                 style={{ padding: 7, borderRadius: 16, cursor: "pointer", display: "flex", justifyContent: "center",
-                  border: `2px solid ${avatar === a ? T.blue : "transparent"}`,
-                  background: avatar === a ? "rgba(10,132,255,0.15)" : T.card }}>
+                  border: `${T.bw} solid ${INK}`, boxShadow: avatar === a ? T.shadowMd : T.shadowSm,
+                  background: avatar === a ? T.yellow : T.card }}>
                 <Avatar id={a} size={54} />
               </button>
             ))}
           </div>
           <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, letterSpacing: 0.3, marginBottom: 8 }}>USERNAME</div>
           <input value={username} onChange={(e) => setUsername(e.target.value.slice(0, 16))} autoComplete="off"
-            style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: `1px solid ${T.border}`,
-              background: T.card, color: "#fff", fontSize: 16, fontFamily: T.font, outline: "none",
+            style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: `${T.bw} solid ${INK}`,
+              background: T.card, color: INK, fontSize: 16, fontFamily: T.font, outline: "none",
               marginBottom: 18, boxSizing: "border-box" }} />
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
-            background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: "14px 16px", marginBottom: 18 }}>
+            background: T.card, border: `${T.bw} solid ${INK}`, borderRadius: 16, padding: "14px 16px", marginBottom: 18 }}>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}><Icon name="sound" size={17} color="#fff" strokeWidth={2.1} /> Sounds</div>
+              <div style={{ fontSize: 15, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}><Icon name="sound" size={17} color={INK} strokeWidth={2.1} /> Sounds</div>
               <div style={{ color: T.sub, fontSize: 12 }}>Sound effects in games</div>
             </div>
             <Switch on={soundOn} toggle={() => { const v = !soundOn; setSoundOn(v); Sound.on = v; if (v) Sound.beep(880, 0.08); }} />
           </div>
-          <BigButton color={T.card2} style={{ boxShadow: "none", border: `1px solid ${T.border}`, marginBottom: 12 }}
+          <BigButton color={T.card2} style={{ boxShadow: "none", border: `${T.bw} solid ${INK}`, marginBottom: 12 }}
             onClick={() => { setPlayedGames({}); setBonusPts(0); setRewardClaimed(false); setSettingsOpen(false); showToast("Day reset (demo)"); }}>
-            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}><Icon name="refresh" size={17} color="#fff" strokeWidth={2.2} /> Reset day (demo)</span>
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}><Icon name="refresh" size={17} color={INK} strokeWidth={2.2} /> Reset day (demo)</span>
           </BigButton>
           <div style={{ color: T.sub2, fontSize: 12, textAlign: "center" }}>Skill Duels · v3.0 prototype</div>
         </Sheet>
       )}
 
-      {/* Tab bar */}
-      {!activeGame && !duelOpp && (
-        <div style={{ position: "absolute", bottom: 0, left: 10, right: 10, display: "flex", justifyContent: "space-around",
-          padding: IS_C ? "9px 6px 16px" : IS_B ? "8px 6px 14px" : "9px 6px 15px",
-          background: IS_C ? "rgba(255,255,255,0.82)" : IS_B ? "rgba(17,16,14,0.88)" : "rgba(16,18,26,0.78)", backdropFilter: "blur(28px)",
-          WebkitBackdropFilter: "blur(28px)", border: `1px solid ${T.border}`, borderRadius: IS_C ? "30px 30px 0 0" : IS_B ? "16px 16px 0 0" : "24px 24px 0 0",
-          boxShadow: IS_C
-            ? "0 -12px 30px rgba(86,64,150,0.14), 0 -5px 0 rgba(70,103,255,0.06)"
-            : IS_B
-            ? "0 -14px 38px rgba(0,0,0,0.50), inset 0 1px 0 rgba(255,224,113,0.14)"
-            : "0 -16px 46px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.10)" }}>
-          {tabs.map(([id, label, icon]) => (
-            <button key={id} onClick={() => setTab(id)}
-              style={{ background: "none", border: "none", cursor: "pointer", fontFamily: T.font,
-                color: tab === id ? (IS_C ? T.purple : IS_B ? T.yellow : T.blue) : T.sub2, display: "flex", flexDirection: "column", alignItems: "center",
-                gap: 3, fontSize: 10, fontWeight: 700, width: 60 }}>
-              <span style={{ display: "flex", alignItems: "center", justifyContent: "center",
-                background: tab === id
-                  ? (IS_C ? "linear-gradient(135deg, rgba(70,103,255,0.16), rgba(255,79,120,0.14))" : IS_B ? "linear-gradient(180deg, rgba(255,224,113,0.28), rgba(255,91,98,0.10))" : "linear-gradient(180deg, rgba(78,161,255,0.24), rgba(78,161,255,0.10))")
-                  : "transparent",
-                padding: "6px 13px", borderRadius: IS_C ? 18 : IS_B ? 12 : 999, transition: "background 250ms, transform 250ms",
-                animation: tab === id ? "tabPop 320ms cubic-bezier(.22,1,.36,1)" : "none",
-                boxShadow: tab === id ? `0 8px 22px ${IS_C ? T.purple : IS_B ? T.yellow : T.blue}22, inset 0 1px 0 rgba(255,255,255,0.16)` : "none" }}>
-                <Icon name={icon} size={20} color={tab === id ? (IS_C ? T.purple : IS_B ? T.yellow : T.teal) : (IS_C ? "rgba(33,24,61,0.32)" : "rgba(239,242,255,0.35)")} />
-              </span>
-              {label}
-            </button>
-          ))}
-        </div>
+      {/* Navigation menu sheet — opened from the orb */}
+      {menuOpen && !inGame && (
+        <>
+          <div onClick={() => setMenuOpen(false)}
+            style={{ position: "absolute", inset: 0, zIndex: 45, background: "rgba(20,18,15,0.5)" }} />
+          <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, zIndex: 46, background: T.bg,
+            borderTop: `3px solid ${INK}`, borderRadius: "26px 26px 0 0", padding: "22px 20px 30px",
+            animation: "sheetup 280ms ease both" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 20, color: INK, textTransform: "uppercase" }}>Go to</div>
+              <button className="pressable" onClick={() => setMenuOpen(false)}
+                style={{ width: 34, height: 34, cursor: "pointer", ...sticker(T.card, `3px 3px 0 ${INK}`), borderRadius: 9,
+                  display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Icon name="x" size={16} color={INK} strokeWidth={3} />
+              </button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              {SECTIONS.map(([id, label, color, icon], i) => (
+                <button key={id} className="pressable" onClick={() => { setTab(id); setMenuOpen(false); }}
+                  style={{ textAlign: "left", cursor: "pointer", ...sticker(tab === id ? color : T.card, T.shadowMd),
+                    borderRadius: 14, padding: 15, display: "flex", flexDirection: "column", gap: 12, minHeight: 98,
+                    animation: "tilein 300ms ease both", animationDelay: `${i * 35}ms` }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, border: `${T.bw} solid ${INK}`, background: "#fff",
+                    display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Icon name={icon} size={22} color={INK} strokeWidth={2.2} />
+                  </div>
+                  <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 16, color: INK, textTransform: "uppercase",
+                    display: "flex", alignItems: "center", gap: 6 }}>
+                    {label}
+                    {tab === id && <span style={{ width: 8, height: 8, borderRadius: "50%", background: INK, display: "inline-block" }} />}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Floating orb nav — one thumb-reachable target instead of a five-way tab bar */}
+      {!inGame && (
+        <button onClick={() => setMenuOpen((o) => !o)}
+          style={{ position: "absolute", left: "50%", bottom: 26, transform: "translateX(-50%)", zIndex: 48,
+            width: 64, height: 64, borderRadius: "50%", border: `3px solid ${INK}`, cursor: "pointer",
+            background: menuOpen ? T.red : INK, transition: "background 200ms",
+            boxShadow: `0 6px 0 ${INK}, 0 10px 22px rgba(0,0,0,0.3)`,
+            display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Icon name={menuOpen ? "x" : "menu"} size={26} color={T.yellow} strokeWidth={menuOpen ? 3 : 2.4} />
+        </button>
       )}
     </>
   );
