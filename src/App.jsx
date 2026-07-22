@@ -3288,15 +3288,23 @@ export default function App() {
           onClose={() => setMenuOpen(false)} />
       )}
 
-      {/* Floating orb nav — one thumb-reachable target instead of a five-way tab bar */}
+      {/* Floating orb nav — one thumb-reachable target instead of a five-way tab bar.
+          It steps aside while the sheet is open: the sheet has its own close button,
+          a backdrop tap and swipe-down, and the orb was sitting on top of the last
+          section tile. */}
       {!inGame && (
-        <button onClick={() => setMenuOpen((o) => !o)}
-          style={{ position: "absolute", left: "50%", bottom: 26, transform: "translateX(-50%)", zIndex: 48,
+        <button onClick={() => setMenuOpen(true)} aria-label="Open menu" aria-expanded={menuOpen}
+          style={{ position: "absolute", left: "50%", bottom: 26, zIndex: 48,
+            transform: `translateX(-50%) scale(${menuOpen ? 0.7 : 1})`,
+            opacity: menuOpen ? 0 : 1, pointerEvents: menuOpen ? "none" : "auto",
+            transition: "opacity 180ms ease, transform 180ms cubic-bezier(.22,1,.36,1)",
             width: 64, height: 64, borderRadius: "50%", border: `3px solid ${INK}`, cursor: "pointer",
-            background: menuOpen ? T.red : INK, transition: "background 200ms",
-            boxShadow: `0 6px 0 ${INK}, 0 10px 22px rgba(0,0,0,0.3)`,
+            background: INK,
+            // The cream ring is load-bearing: an ink button over an ink drop shadow
+            // merges into one 64x70 blob and reads as an oval, not a circle.
+            boxShadow: `0 0 0 3px ${T.bg}, 0 7px 0 ${INK}, 0 12px 22px rgba(0,0,0,0.28)`,
             display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Icon name={menuOpen ? "x" : "menu"} size={26} color={T.yellow} strokeWidth={menuOpen ? 3 : 2.4} />
+          <Icon name="menu" size={26} color={T.yellow} strokeWidth={2.4} />
         </button>
       )}
     </>
