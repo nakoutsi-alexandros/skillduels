@@ -468,21 +468,125 @@ const Switch = ({ on, toggle }) => (
   </div>
 );
 
-const Sheet = ({ onClose, children }) => (
-  <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(20,18,15,0.5)",
-    zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-    <div onClick={(e) => e.stopPropagation()}
-      style={{ width: "100%", maxWidth: 400, boxSizing: "border-box", background: T.bg,
-        borderRadius: "26px 26px 0 0", padding: "10px 20px 30px",
-        animation: "sheetup 280ms cubic-bezier(.22,1,.36,1)",
-        borderTop: `3px solid ${INK}`, borderLeft: `3px solid ${INK}`, borderRight: `3px solid ${INK}`,
-        maxHeight: "85vh", overflowY: "auto", overflowX: "hidden" }}
-      className="sd-scroll">
-      <div style={{ width: 44, height: 6, borderRadius: 3, background: INK, margin: "6px auto 16px" }} />
-      {children}
+// Swipe-to-dismiss for bottom sheets. The grabber was previously decorative — it
+// looked draggable and did nothing. Dragging from the grabber always works; dragging
+// from the body only takes over once the content is scrolled to the top, so it never
+// fights the scroll.
+const DISMISS_PX = 110, DISMISS_VELOCITY = 0.5; // px, px/ms
+function useSheetDrag(onClose) {
+  const panel = useRef(null);
+  const drag = useRef(null);
+  const [dy, setDy] = useState(0);
+  const [closing, setClosing] = useState(false);
+
+  const down = (e, fromHandle = false) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    drag.current = { y0: e.clientY, t0: performance.now(), y: e.clientY, fromHandle, on: false };
+  };
+  const move = (e) => {
+    const d = drag.current;
+    if (!d || closing) return;
+    const delta = e.clientY - d.y0;
+    d.y = e.clientY;
+    if (delta <= 0 && !d.on) return;
+    if (!d.on) {
+      if (!d.fromHandle && panel.current && panel.current.scrollTop > 0) { drag.current = null; return; }
+      d.on = true;
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* capture is best-effort */ }
+    }
+    setDy(Math.max(0, delta));
+  };
+  const up = () => {
+    const d = drag.current;
+    drag.current = null;
+    if (!d || !d.on) { setDy(0); return; }
+    const velocity = (d.y - d.y0) / Math.max(1, performance.now() - d.t0);
+    // A short flick should dismiss as readily as a long slow drag.
+    if (dy > DISMISS_PX || velocity > DISMISS_VELOCITY) { setClosing(true); setTimeout(onClose, 170); }
+    else setDy(0);
+  };
+
+  const dragging = !!(drag.current && drag.current.on);
+  return {
+    panel,
+    handleProps: { onPointerDown: (e) => down(e, true), onPointerMove: move, onPointerUp: up, onPointerCancel: up,
+      style: { touchAction: "none", cursor: "grab" } },
+    bodyProps: { onPointerDown: (e) => down(e, false), onPointerMove: move, onPointerUp: up, onPointerCancel: up },
+    motion: {
+      transform: closing ? "translateY(100%)" : `translateY(${dy}px)`,
+      transition: dragging ? "none" : "transform 200ms cubic-bezier(.22,1,.36,1)",
+      animation: dy || closing ? "none" : "sheetup 280ms cubic-bezier(.22,1,.36,1)",
+    },
+    backdropOpacity: closing ? 0 : Math.max(0.2, 0.5 - dy / 600),
+  };
+}
+
+const Sheet = ({ onClose, children }) => {
+  const { panel, handleProps, bodyProps, motion, backdropOpacity } = useSheetDrag(onClose);
+  return (
+    <div onClick={onClose} style={{ position: "absolute", inset: 0, background: `rgba(20,18,15,${backdropOpacity})`,
+      transition: "background 200ms", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div ref={panel} onClick={(e) => e.stopPropagation()} {...bodyProps}
+        style={{ width: "100%", maxWidth: 400, boxSizing: "border-box", background: T.bg,
+          borderRadius: "26px 26px 0 0", padding: "10px 20px 30px",
+          borderTop: `3px solid ${INK}`, borderLeft: `3px solid ${INK}`, borderRight: `3px solid ${INK}`,
+          maxHeight: "85vh", overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", ...motion }}
+        className="sd-scroll">
+        {/* Generous invisible hit area — a 6px bar is far too small a drag target. */}
+        <div {...handleProps} style={{ ...handleProps.style, padding: "8px 0 14px", margin: "-8px 0 0" }}>
+          <div style={{ width: 44, height: 6, borderRadius: 3, background: INK, margin: "0 auto" }} />
+        </div>
+        {children}
+      </div>
     </div>
-  </div>
-);
+  );
+};
+
+// The orb's section switcher. Its own component so the drag state unmounts with it
+// and every open starts from a clean slate.
+const NavSheet = ({ sections, tab, onGo, onClose }) => {
+  const { panel, handleProps, bodyProps, motion, backdropOpacity } = useSheetDrag(onClose);
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, zIndex: 45,
+        transition: "background 200ms", background: `rgba(20,18,15,${backdropOpacity})` }} />
+      <div ref={panel} {...bodyProps}
+        style={{ position: "absolute", left: 0, right: 0, bottom: 0, zIndex: 46, background: T.bg,
+          borderTop: `3px solid ${INK}`, borderRadius: "26px 26px 0 0", padding: "10px 20px 30px",
+          overscrollBehavior: "contain", ...motion }}>
+        <div {...handleProps} style={{ ...handleProps.style, padding: "8px 0 14px", margin: "-8px 0 0" }}>
+          <div style={{ width: 44, height: 6, borderRadius: 3, background: INK, margin: "0 auto" }} />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 20, color: INK, textTransform: "uppercase" }}>Go to</div>
+          <button className="pressable" onClick={onClose}
+            style={{ width: 34, height: 34, cursor: "pointer", ...sticker(T.card, `3px 3px 0 ${INK}`), borderRadius: 9,
+              display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Icon name="x" size={16} color={INK} strokeWidth={3} />
+          </button>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          {sections.map(([id, label, color, icon], i) => (
+            <button key={id} className="pressable" onClick={() => onGo(id)}
+              style={{ textAlign: "left", cursor: "pointer", ...sticker(tab === id ? color : T.card, T.shadowMd),
+                borderRadius: 14, padding: 15, display: "flex", flexDirection: "column", gap: 12, minHeight: 98,
+                animation: "tilein 300ms ease both", animationDelay: `${i * 35}ms` }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, border: `${T.bw} solid ${INK}`, background: "#fff",
+                display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Icon name={icon} size={22} color={INK} strokeWidth={2.2} />
+              </div>
+              <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 16, color: INK, textTransform: "uppercase",
+                display: "flex", alignItems: "center", gap: 6 }}>
+                {label}
+                {tab === id && <span style={{ width: 8, height: 8, borderRadius: "50%", background: INK, display: "inline-block" }} />}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+};
 
 const BrandMark = ({ size = 76 }) => (
   // flexShrink:0 — it lives in a scrolling column flexbox that would otherwise squash it.
@@ -3180,40 +3284,8 @@ export default function App() {
 
       {/* Navigation menu sheet — opened from the orb */}
       {menuOpen && !inGame && (
-        <>
-          <div onClick={() => setMenuOpen(false)}
-            style={{ position: "absolute", inset: 0, zIndex: 45, background: "rgba(20,18,15,0.5)" }} />
-          <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, zIndex: 46, background: T.bg,
-            borderTop: `3px solid ${INK}`, borderRadius: "26px 26px 0 0", padding: "22px 20px 30px",
-            animation: "sheetup 280ms ease both" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-              <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 20, color: INK, textTransform: "uppercase" }}>Go to</div>
-              <button className="pressable" onClick={() => setMenuOpen(false)}
-                style={{ width: 34, height: 34, cursor: "pointer", ...sticker(T.card, `3px 3px 0 ${INK}`), borderRadius: 9,
-                  display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Icon name="x" size={16} color={INK} strokeWidth={3} />
-              </button>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {SECTIONS.map(([id, label, color, icon], i) => (
-                <button key={id} className="pressable" onClick={() => { setTab(id); setMenuOpen(false); }}
-                  style={{ textAlign: "left", cursor: "pointer", ...sticker(tab === id ? color : T.card, T.shadowMd),
-                    borderRadius: 14, padding: 15, display: "flex", flexDirection: "column", gap: 12, minHeight: 98,
-                    animation: "tilein 300ms ease both", animationDelay: `${i * 35}ms` }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 10, border: `${T.bw} solid ${INK}`, background: "#fff",
-                    display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Icon name={icon} size={22} color={INK} strokeWidth={2.2} />
-                  </div>
-                  <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 16, color: INK, textTransform: "uppercase",
-                    display: "flex", alignItems: "center", gap: 6 }}>
-                    {label}
-                    {tab === id && <span style={{ width: 8, height: 8, borderRadius: "50%", background: INK, display: "inline-block" }} />}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        </>
+        <NavSheet sections={SECTIONS} tab={tab} onGo={(id) => { setTab(id); setMenuOpen(false); }}
+          onClose={() => setMenuOpen(false)} />
       )}
 
       {/* Floating orb nav — one thumb-reachable target instead of a five-way tab bar */}
