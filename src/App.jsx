@@ -951,6 +951,14 @@ const shuffleSeeded = (arr, seed) => {
   for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
   return arr;
 };
+// The scored daily attempt shares one seed so everyone plays the same challenge and
+// the leaderboard means something. Practice and replays get a fresh seed — drilling
+// the identical grid over and over teaches the answers, not the skill.
+const runSeed = (id, fresh) => (fresh ? (Math.random() * 4294967296) >>> 0 : daySeed(id));
+
+// Timed rounds share one length and one clock reader.
+const ROUND_S = 30, ROUND_MS = ROUND_S * 1000;
+const msLeft = (endAt) => Math.max(0, Math.round(((endAt - performance.now()) / 1000) * 10) / 10);
 
 const Dots = ({ n, done, color = T.blue }) => (
   <div style={{ display: "flex", gap: 6 }}>
@@ -973,12 +981,15 @@ const GameIntro = ({ icon, color, title, sub, onStart, cta = "Start" }) => (
 );
 
 // ================= GAME: Duel Draw (signature) — react on green, HOLD on red =================
-function DuelDrawGame({ onFinish, onBegin, rounds = 5 }) {
+function DuelDrawGame({ onFinish, onBegin, rounds = 5, fresh }) {
   const [phase, setPhase] = useState("intro"); // intro|wait|green|red|early|badhit|between|done
   const [shown, setShown] = useState(0);
   const res = useRef([]);
   const goAt = useRef(0);
   const t1 = useRef(null), t2 = useRef(null);
+  // Seeded like the other games: which rounds are fakes, and how long each wait
+  // runs, has to match for everyone on the daily or the scores aren't comparable.
+  const rng = useRef(null);
   useEffect(() => () => { clearTimeout(t1.current); clearTimeout(t2.current); }, []);
 
   const commit = (ms) => {
@@ -991,15 +1002,17 @@ function DuelDrawGame({ onFinish, onBegin, rounds = 5 }) {
     } else { setPhase("between"); t1.current = setTimeout(startRound, 720); }
   };
   const startRound = () => {
+    if (!rng.current) rng.current = mulberry32(runSeed("draw", fresh));
     setPhase("wait");
+    const red = rng.current() < 0.32;
+    const wait = 1100 + rng.current() * 1800;
     t1.current = setTimeout(() => {
-      const red = Math.random() < 0.32;
       goAt.current = performance.now();
       if (red) {
         Sound.beep(300, 0.08, "triangle"); setPhase("red");
         t2.current = setTimeout(() => { Sound.beep(1050, 0.06); commit(210); }, 820); // held correctly
       } else { Sound.beep(1250, 0.06); setPhase("green"); }
-    }, 1100 + Math.random() * 1800);
+    }, wait);
   };
   const tap = () => {
     if (phase === "intro") return startRound();
@@ -1094,7 +1107,7 @@ function BullseyeGame({ onFinish, onBegin, rounds = 5 }) {
 }
 
 // ================= GAME: Number Rush — tap 1→25 in order (Schulte) =================
-function NumberRushGame({ onFinish, onBegin }) {
+function NumberRushGame({ onFinish, onBegin, fresh }) {
   const N = 25;
   const [phase, setPhase] = useState("intro"); // intro|play|done
   const [next, setNext] = useState(1);
@@ -1104,7 +1117,7 @@ function NumberRushGame({ onFinish, onBegin }) {
   const nums = useRef([]);
   useEffect(() => { if (phase !== "play") return; const id = setInterval(() => setNow(performance.now()), 97); return () => clearInterval(id); }, [phase]);
   const start = () => {
-    nums.current = shuffleSeeded(Array.from({ length: N }, (_, i) => i + 1), daySeed("numbers"));
+    nums.current = shuffleSeeded(Array.from({ length: N }, (_, i) => i + 1), runSeed("numbers", fresh));
     setNext(1); t0.current = performance.now(); setNow(t0.current); setPhase("play");
   };
   const tap = (n) => {
@@ -1148,10 +1161,10 @@ function NumberRushGame({ onFinish, onBegin }) {
 }
 
 // ================= GAME: Odd One Out — spot the different tile =================
-function OddOneGame({ onFinish, onBegin }) {
+function OddOneGame({ onFinish, onBegin, fresh }) {
   const [phase, setPhase] = useState("intro"); // intro|play|done
   const [level, setLevel] = useState(1);
-  const [time, setTime] = useState(30);
+  const [time, setTime] = useState(ROUND_S);
   const [correct, setCorrect] = useState(0);
   const [flash, setFlash] = useState(-2); // -2 none, -1 wrong-any, idx correct
   const rng = useRef(null);
@@ -1165,13 +1178,31 @@ function OddOneGame({ onFinish, onBegin }) {
     const odd = Math.floor(rng.current() * cells);
     return { size, cells, base: `hsl(${hue} ${sat}% ${light}%)`, odd, oddColor: `hsl(${hue} ${sat}% ${light + delta}%)` };
   };
-  const start = () => { rng.current = mulberry32(daySeed("oddone")); setLevel(1); setCorrect(0); setTime(30); setBoard(makeBoard(1)); setPhase("play"); };
-  useEffect(() => { if (phase !== "play") return; if (time <= 0) { finish(); return; } const id = setTimeout(() => setTime((t) => Math.round((t - 0.1) * 10) / 10), 100); return () => clearTimeout(id); }, [phase, time]);
+  const endAt = useRef(0);
+  const start = () => {
+    rng.current = mulberry32(runSeed("oddone", fresh));
+    endAt.current = performance.now() + ROUND_MS;
+    setLevel(1); setCorrect(0); setTime(ROUND_S); setBoard(makeBoard(1)); setPhase("play");
+  };
+  // Clock reads off performance.now() rather than counting ticks — a chained
+  // setTimeout drifts by however long React takes to render, which made the round
+  // run ~8% long on desktop and longer still on a slow phone.
+  useEffect(() => {
+    if (phase !== "play") return;
+    const id = setInterval(() => setTime(msLeft(endAt.current)), 100);
+    return () => clearInterval(id);
+  }, [phase]);
+  useEffect(() => { if (phase === "play" && time <= 0) finish(); }, [phase, time]);
   const finish = () => { setPhase("done"); const pts = Math.max(120, Math.min(1000, correct * 55 + 100)); setTimeout(() => onFinish(correct, pts, `${correct} found`), 300); };
   const tap = (i) => {
     if (phase !== "play" || !board) return;
     if (i === board.odd) { Sound.beep(720, 0.05); setFlash(i); const lv = level + 1; setCorrect((c) => c + 1); setLevel(lv); setTimeout(() => { setFlash(-2); setBoard(makeBoard(lv)); }, 130); }
-    else { Sound.beep(300, 0.09, "triangle"); setFlash(-1); setTime((t) => Math.max(0, t - 1.5)); setTimeout(() => setFlash(-2), 200); }
+    else {
+      Sound.beep(300, 0.09, "triangle"); setFlash(-1);
+      endAt.current -= 1500; // penalty comes off the deadline, not the displayed value
+      setTime(msLeft(endAt.current));
+      setTimeout(() => setFlash(-2), 200);
+    }
   };
   if (phase === "intro")
     return <GameIntro icon="target" color={T.purple} title="Odd One Out" cta="Start"
@@ -1198,7 +1229,7 @@ function OddOneGame({ onFinish, onBegin }) {
 }
 
 // ================= GAME: Chimp Test — memorize the order =================
-function ChimpGame({ onFinish, onBegin }) {
+function ChimpGame({ onFinish, onBegin, fresh }) {
   const SIZE = 5, CELLS = 25;
   const [phase, setPhase] = useState("intro"); // intro|show|recall|done
   const [n, setN] = useState(4);
@@ -1207,14 +1238,15 @@ function ChimpGame({ onFinish, onBegin }) {
   const [next, setNext] = useState(1);
   const [flash, setFlash] = useState(-1);
   const [placement, setPlacement] = useState([]); // [{cell, num}]
-  const rng = useRef(null);
+  // One base seed per run; each round length derives its layout from it.
+  const baseSeed = useRef(0);
   const buildRound = (num) => {
-    const cells = shuffleSeeded(Array.from({ length: CELLS }, (_, i) => i), (daySeed("chimp") ^ (num * 2654435761)) >>> 0).slice(0, num);
+    const cells = shuffleSeeded(Array.from({ length: CELLS }, (_, i) => i), (baseSeed.current ^ (num * 2654435761)) >>> 0).slice(0, num);
     setPlacement(cells.map((cell, idx) => ({ cell, num: idx + 1 })));
     setNext(1); setPhase("show");
     setTimeout(() => setPhase("recall"), 600 + num * 260);
   };
-  const start = () => { rng.current = mulberry32(daySeed("chimp")); setN(4); setLives(3); setBest(0); buildRound(4); };
+  const start = () => { baseSeed.current = runSeed("chimp", fresh); setN(4); setLives(3); setBest(0); buildRound(4); };
   const cellNum = (cell) => placement.find((p) => p.cell === cell)?.num;
   const tap = (cell) => {
     if (phase !== "recall") return;
@@ -1263,9 +1295,9 @@ function ChimpGame({ onFinish, onBegin }) {
 }
 
 // ================= GAME: Quick Math — true or false, fast =================
-function QuickMathGame({ onFinish, onBegin }) {
+function QuickMathGame({ onFinish, onBegin, fresh }) {
   const [phase, setPhase] = useState("intro"); // intro|play|done
-  const [time, setTime] = useState(30);
+  const [time, setTime] = useState(ROUND_S);
   const [correct, setCorrect] = useState(0);
   const [streak, setStreak] = useState(0);
   const [q, setQ] = useState(null);
@@ -1282,12 +1314,32 @@ function QuickMathGame({ onFinish, onBegin }) {
     const shown = truth ? ans : ans + (r() < 0.5 ? -1 : 1) * (1 + Math.floor(r() * 6));
     setQ({ text: `${a} ${op} ${b} = ${shown}`, truth });
   };
-  const start = () => { rng.current = mulberry32(daySeed("quickmath")); setCorrect(0); setStreak(0); setTime(30); setPhase("play"); gen(); };
-  useEffect(() => { if (phase !== "play") return; if (time <= 0) { setPhase("done"); const pts = Math.max(120, Math.min(1000, correct * 45 + 100)); setTimeout(() => onFinish(correct, pts, `${correct} correct`), 300); return; } const id = setTimeout(() => setTime((t) => Math.round((t - 0.1) * 10) / 10), 100); return () => clearTimeout(id); }, [phase, time]);
+  const endAt = useRef(0);
+  const start = () => {
+    rng.current = mulberry32(runSeed("quickmath", fresh));
+    endAt.current = performance.now() + ROUND_MS;
+    setCorrect(0); setStreak(0); setTime(ROUND_S); setPhase("play"); gen();
+  };
+  useEffect(() => {
+    if (phase !== "play") return;
+    const id = setInterval(() => setTime(msLeft(endAt.current)), 100);
+    return () => clearInterval(id);
+  }, [phase]);
+  useEffect(() => {
+    if (phase !== "play" || time > 0) return;
+    setPhase("done");
+    const pts = Math.max(120, Math.min(1000, correct * 45 + 100));
+    setTimeout(() => onFinish(correct, pts, `${correct} correct`), 300);
+  }, [phase, time]);
   const answer = (val) => {
     if (phase !== "play" || !q) return;
     if (val === q.truth) { Sound.beep(720, 0.05); setCorrect((c) => c + 1); setStreak((s) => s + 1); setFlash("ok"); }
-    else { Sound.beep(300, 0.09, "triangle"); setStreak(0); setTime((t) => Math.max(0, t - 2)); setFlash("no"); }
+    else {
+      Sound.beep(300, 0.09, "triangle"); setStreak(0);
+      endAt.current -= 2000; // penalty off the deadline so the clock stays truthful
+      setTime(msLeft(endAt.current));
+      setFlash("no");
+    }
     setTimeout(() => setFlash(null), 140); gen();
   };
   if (phase === "intro")
@@ -2562,6 +2614,8 @@ export default function App() {
   const userEntry = totalPts > 0 ? { name: username, avatar, pts: totalPts } : null;
   const game = GAMES.find((g) => g.id === activeGame);
   const isReplay = activeGame && playedGames[activeGame];
+  // Nothing is being recorded → the challenge should be new rather than the day's fixed one.
+  const unscored = !!(practiceMode || isReplay);
   const friends = BOTS.filter((b) => b.friend);
 
   // Sections in orbit order — the header arrows and the orb menu both walk this list.
@@ -2722,12 +2776,12 @@ export default function App() {
             ) : (
               <div style={{ color: T.sub, fontSize: 13, marginBottom: 18, fontWeight: 700 }}>One attempt — make it count!</div>
             )}
-            {activeGame === "draw" && <DuelDrawGame onFinish={finish} onBegin={() => setGameLive(true)} />}
-            {activeGame === "bullseye" && <BullseyeGame onFinish={finish} onBegin={() => setGameLive(true)} />}
-            {activeGame === "numbers" && <NumberRushGame onFinish={finish} onBegin={() => setGameLive(true)} />}
-            {activeGame === "oddone" && <OddOneGame onFinish={finish} onBegin={() => setGameLive(true)} />}
-            {activeGame === "chimp" && <ChimpGame onFinish={finish} onBegin={() => setGameLive(true)} />}
-            {activeGame === "quickmath" && <QuickMathGame onFinish={finish} onBegin={() => setGameLive(true)} />}
+            {activeGame === "draw" && <DuelDrawGame onFinish={finish} onBegin={() => setGameLive(true)} fresh={unscored} />}
+            {activeGame === "bullseye" && <BullseyeGame onFinish={finish} onBegin={() => setGameLive(true)} fresh={unscored} />}
+            {activeGame === "numbers" && <NumberRushGame onFinish={finish} onBegin={() => setGameLive(true)} fresh={unscored} />}
+            {activeGame === "oddone" && <OddOneGame onFinish={finish} onBegin={() => setGameLive(true)} fresh={unscored} />}
+            {activeGame === "chimp" && <ChimpGame onFinish={finish} onBegin={() => setGameLive(true)} fresh={unscored} />}
+            {activeGame === "quickmath" && <QuickMathGame onFinish={finish} onBegin={() => setGameLive(true)} fresh={unscored} />}
           </>
         ) : (
           <>
