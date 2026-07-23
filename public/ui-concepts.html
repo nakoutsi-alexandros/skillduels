@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Skill Duels — Social Performance UI</title>
+  <style>
+    :root {
+      --ink: #080a0b;
+      --surface: #0e1113;
+      --surface-2: #15191c;
+      --surface-3: #1c2125;
+      --line: rgba(255,255,255,.09);
+      --line-strong: rgba(255,255,255,.16);
+      --text: #f5f3ee;
+      --muted: #92999d;
+      --orange: #ff5a1f;
+      --orange-soft: rgba(255,90,31,.14);
+      --lime: #c5f04a;
+      --red: #ff645d;
+      --radius-sm: 10px;
+      --radius-md: 16px;
+      --radius-lg: 24px;
+      --shadow: 0 24px 70px rgba(0,0,0,.48);
+    }
+
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 18% 4%, rgba(255,90,31,.08), transparent 26%),
+        radial-gradient(circle at 78% 72%, rgba(197,240,74,.04), transparent 25%),
+        #050607;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button { font: inherit; }
+    .board {
+      width: min(1500px, 100%);
+      margin: 0 auto;
+      padding: 42px 34px 54px;
+    }
+
+    .board-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 30px;
+    }
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--orange);
+      font-size: 12px;
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+    .board h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 50px);
+      letter-spacing: -.045em;
+      line-height: .98;
+    }
+    .board-note {
+      max-width: 480px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+      text-align: right;
+    }
+
+    .screens {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(310px, 1fr));
+      gap: 24px;
+      align-items: start;
+    }
+
+    .device-wrap { min-width: 0; }
+    .screen-label {
+      display: flex;
+      justify-content: space-between;
+      padding: 0 5px 10px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .phone {
+      position: relative;
+      height: 820px;
+      overflow: hidden;
+      border: 1px solid var(--line-strong);
+      border-radius: 30px;
+      background: var(--ink);
+      box-shadow: var(--shadow);
+    }
+    .phone::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: .35;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");
+    }
+    .screen-inner {
+      position: relative;
+      z-index: 1;
+      padding: 22px 20px 94px;
+    }
+
+    .appbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      min-height: 42px;
+      margin-bottom: 22px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 900;
+      letter-spacing: -.03em;
+    }
+    .brand-mark {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      color: #080a0b;
+      background: var(--orange);
+      border-radius: 8px 8px 8px 2px;
+      font-size: 15px;
+      transform: skew(-8deg);
+    }
+    .brand-mark span { transform: skew(8deg); }
+    .icon-btn {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: rgba(255,255,255,.025);
+      cursor: pointer;
+    }
+    .icon-btn svg { width: 17px; height: 17px; }
+
+    .greeting {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 15px;
+      margin-bottom: 22px;
+    }
+    .greeting h2, .section-title, .result-title {
+      margin: 0;
+      letter-spacing: -.035em;
+    }
+    .greeting h2 { font-size: 29px; line-height: 1.04; }
+    .subcopy { margin: 7px 0 0; color: var(--muted); font-size: 13px; }
+    .streak {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--text);
+      white-space: nowrap;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .flame { color: var(--orange); font-size: 20px; }
+
+    .hero-panel {
+      position: relative;
+      overflow: hidden;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: linear-gradient(145deg, #171b1e, #101315);
+    }
+    .hero-panel::after {
+      content: "";
+      position: absolute;
+      width: 220px;
+      height: 220px;
+      right: -110px;
+      top: -110px;
+      border: 34px solid rgba(255,90,31,.08);
+      border-radius: 50%;
+    }
+    .hero-top, .section-head, .feed-meta, .result-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .mini-label {
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+    .rank-pill {
+      position: relative;
+      z-index: 1;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 9px;
+      color: var(--lime);
+      border: 1px solid rgba(197,240,74,.18);
+      border-radius: 999px;
+      background: rgba(197,240,74,.06);
+      font-size: 10px;
+      font-weight: 800;
+    }
+    .weekly-number {
+      margin: 16px 0 2px;
+      font-size: 44px;
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: -.055em;
+    }
+    .weekly-number small { color: var(--muted); font-size: 15px; font-weight: 600; letter-spacing: 0; }
+    .trend { color: var(--lime); font-size: 12px; font-weight: 800; }
+    .chart { margin-top: 16px; }
+    .chart svg { width: 100%; height: 72px; overflow: visible; }
+    .chart-grid line { stroke: rgba(255,255,255,.05); stroke-width: 1; }
+    .chart-line { fill: none; stroke: var(--orange); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    .chart-fill { fill: url(#chartGradient); opacity: .5; }
+    .days { display: flex; justify-content: space-between; color: #667075; font-size: 9px; font-weight: 700; }
+
+    .section-head { margin: 25px 0 12px; }
+    .section-title { font-size: 18px; }
+    .section-kicker { color: var(--orange); font-size: 12px; font-weight: 800; }
+    .challenge-list { border-top: 1px solid var(--line); }
+    .challenge-row {
+      display: grid;
+      grid-template-columns: 38px 1fr auto;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 2px;
+      border-bottom: 1px solid var(--line);
+    }
+    .game-icon {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      color: var(--orange);
+      border-radius: 11px;
+      background: var(--orange-soft);
+      font-size: 17px;
+      font-weight: 900;
+    }
+    .challenge-row h4 { margin: 0 0 3px; font-size: 13px; }
+    .challenge-row p { margin: 0; color: var(--muted); font-size: 11px; }
+    .benchmark { text-align: right; }
+    .benchmark strong { display: block; font-size: 12px; }
+    .benchmark span { color: var(--muted); font-size: 9px; }
+    .primary-btn {
+      width: 100%;
+      min-height: 52px;
+      margin-top: 18px;
+      color: #110c09;
+      border: 0;
+      border-radius: 14px;
+      background: var(--orange);
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: transform .16s ease, filter .16s ease;
+    }
+    .primary-btn:hover { transform: translateY(-1px); filter: brightness(1.08); }
+
+    .result-header {
+      min-height: 210px;
+      margin: -22px -20px 22px;
+      padding: 24px 20px 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background:
+        linear-gradient(to bottom, rgba(8,10,11,.2), var(--ink)),
+        radial-gradient(circle at 50% 10%, rgba(255,90,31,.2), transparent 55%),
+        linear-gradient(120deg, #242a2e, #0e1113);
+    }
+    .back-row { display: flex; justify-content: space-between; align-items: center; }
+    .back { color: var(--text); border: 0; background: none; padding: 0; cursor: pointer; }
+    .result-title { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+    .result-score { text-align: center; }
+    .personal-best {
+      display: inline-flex;
+      padding: 5px 8px;
+      color: var(--orange);
+      background: rgba(8,10,11,.8);
+      border-radius: 999px;
+      font-size: 9px;
+      font-weight: 900;
+      letter-spacing: .08em;
+    }
+    .score { margin-top: 8px; font-size: 70px; line-height: .9; font-weight: 850; letter-spacing: -.07em; }
+    .score small { font-size: 20px; letter-spacing: -.02em; }
+    .percentile { margin-top: 9px; color: var(--muted); font-size: 12px; letter-spacing: .06em; }
+    .percentile strong { color: var(--orange); }
+
+    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .stat-card {
+      padding: 15px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+    }
+    .stat-card strong { display: block; margin-top: 10px; font-size: 24px; letter-spacing: -.045em; }
+    .stat-card span { color: var(--muted); font-size: 10px; }
+    .positive { color: var(--lime) !important; }
+    .comparison {
+      margin-top: 12px;
+      padding: 17px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+    }
+    .compare-row { display: flex; justify-content: space-between; margin-top: 14px; font-size: 11px; }
+    .compare-row strong:first-child { color: var(--orange); }
+    .track { height: 7px; margin-top: 10px; border-radius: 999px; background: #252a2d; overflow: hidden; }
+    .track > i { display: block; width: 68%; height: 100%; background: var(--orange); border-radius: inherit; }
+    .result-chart { margin-top: 12px; padding: 17px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+    .result-chart svg { width: 100%; height: 110px; margin-top: 10px; }
+    .result-actions { gap: 10px; margin-top: 12px; }
+    .secondary-btn, .share-btn {
+      flex: 1;
+      min-height: 46px;
+      border-radius: 13px;
+      font-size: 11px;
+      font-weight: 850;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .secondary-btn { color: var(--text); border: 1px solid var(--line-strong); background: transparent; }
+    .share-btn { color: #110c09; border: 0; background: var(--orange); }
+
+    .community-title { margin: 2px 0 16px; font-size: 30px; letter-spacing: -.04em; }
+    .tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      padding: 4px;
+      margin-bottom: 18px;
+      border-radius: 13px;
+      background: var(--surface-2);
+    }
+    .tab {
+      min-height: 38px;
+      color: var(--muted);
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .tab.active { color: var(--text); background: var(--surface-3); box-shadow: 0 5px 14px rgba(0,0,0,.25); }
+    .feed { display: grid; gap: 10px; }
+    .feed-item {
+      padding: 15px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+    }
+    .feed-meta { align-items: flex-start; }
+    .person { display: flex; gap: 11px; align-items: center; }
+    .avatar {
+      width: 38px;
+      height: 38px;
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      color: var(--text);
+      border-radius: 50%;
+      background: linear-gradient(145deg, #3b444a, #15191c);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .avatar.orange { background: linear-gradient(145deg, #ff743f, #803019); }
+    .avatar.lime { color: #10130a; background: linear-gradient(145deg, #dafb78, #5e7420); }
+    .person h4 { margin: 0 0 3px; font-size: 13px; }
+    .person p, .time { margin: 0; color: var(--muted); font-size: 10px; }
+    .feed-result {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 14px;
+      margin-top: 13px;
+      padding-top: 13px;
+      border-top: 1px solid var(--line);
+    }
+    .feed-result strong { display: block; font-size: 24px; letter-spacing: -.045em; }
+    .feed-result span { color: var(--orange); font-size: 10px; font-weight: 800; }
+    .challenge-btn {
+      min-width: 100px;
+      min-height: 38px;
+      color: var(--orange);
+      border: 1px solid var(--orange);
+      border-radius: 11px;
+      background: transparent;
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .challenge-btn.sent { color: var(--muted); border-color: var(--line-strong); }
+    .duel-card { border-color: rgba(255,90,31,.32); background: linear-gradient(145deg, rgba(255,90,31,.09), var(--surface)); }
+    .duel-line { display: flex; align-items: center; justify-content: space-between; margin-top: 15px; }
+    .duelist { display: flex; align-items: center; gap: 7px; font-size: 10px; }
+    .vs { color: var(--orange); font-size: 11px; font-weight: 900; }
+    .win { margin-top: 12px; color: var(--lime); font-size: 11px; font-weight: 850; }
+
+    .bottom-nav {
+      position: absolute;
+      z-index: 3;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 76px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      align-items: center;
+      border-top: 1px solid var(--line);
+      background: rgba(9,11,12,.96);
+      backdrop-filter: blur(16px);
+    }
+    .nav-item {
+      display: grid;
+      justify-items: center;
+      gap: 5px;
+      color: #737b80;
+      font-size: 9px;
+      font-weight: 700;
+    }
+    .nav-item.active { color: var(--orange); }
+    .nav-icon {
+      width: 18px;
+      height: 18px;
+      border: 1.7px solid currentColor;
+      border-radius: 5px;
+      opacity: .95;
+    }
+    .nav-item:nth-child(2) .nav-icon { border-radius: 50%; }
+    .nav-item:nth-child(3) .nav-icon { border-width: 0 0 1.7px 1.7px; border-radius: 0; transform: skew(-12deg); }
+    .nav-item:nth-child(4) .nav-icon { border-radius: 3px 3px 6px 6px; }
+    .nav-item:nth-child(5) .nav-icon { border-radius: 50% 50% 7px 7px; }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      z-index: 20;
+      padding: 11px 16px;
+      color: var(--text);
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      background: #171b1e;
+      box-shadow: 0 12px 35px rgba(0,0,0,.45);
+      font-size: 12px;
+      transform: translate(-50%, 24px);
+      opacity: 0;
+      pointer-events: none;
+      transition: .2s ease;
+    }
+    .toast.show { transform: translate(-50%, 0); opacity: 1; }
+
+    @media (max-width: 1050px) {
+      .screens { grid-template-columns: 1fr; max-width: 440px; margin: 0 auto; }
+      .board-head { align-items: flex-start; flex-direction: column; }
+      .board-note { text-align: left; }
+    }
+    @media (max-width: 520px) {
+      .board { padding: 24px 12px 38px; }
+      .phone { height: 790px; border-radius: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="board">
+    <header class="board-head">
+      <div>
+        <p class="eyebrow">UI direction 01 · Social performance</p>
+        <h1>Train. Compare.<br/>Come back stronger.</h1>
+      </div>
+      <p class="board-note">A dark, data-led redesign for Skill Duels—combining daily training, personal progress and lightweight social competition without casino or esports clichés.</p>
+    </header>
+
+    <section class="screens" aria-label="Skill Duels mobile UI concepts">
+      <div class="device-wrap">
+        <div class="screen-label"><span>01 · Today</span><span>Daily ritual</span></div>
+        <article class="phone">
+          <div class="screen-inner">
+            <div class="appbar">
+              <div class="brand"><div class="brand-mark"><span>↯</span></div><span>SKILL DUELS</span></div>
+              <button class="icon-btn" aria-label="Notifications">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
+              </button>
+            </div>
+
+            <div class="greeting">
+              <div><h2>Good morning,<br/>Alex.</h2><p class="subcopy">Six chances to sharpen your edge.</p></div>
+              <div class="streak"><span class="flame">●</span>6 day streak</div>
+            </div>
+
+            <section class="hero-panel">
+              <div class="hero-top"><span class="mini-label">Weekly form</span><span class="rank-pill">▲ Gold · 1385</span></div>
+              <div class="hero-top"><div class="weekly-number">72<small>/100</small></div><span class="trend">+11% ↗</span></div>
+              <div class="chart">
+                <svg viewBox="0 0 320 76" preserveAspectRatio="none" aria-label="Weekly score trend">
+                  <defs><linearGradient id="chartGradient" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#ff5a1f" stop-opacity=".32"/><stop offset="1" stop-color="#ff5a1f" stop-opacity="0"/></linearGradient></defs>
+                  <g class="chart-grid"><line x1="0" y1="18" x2="320" y2="18"/><line x1="0" y1="45" x2="320" y2="45"/><line x1="0" y1="72" x2="320" y2="72"/></g>
+                  <path class="chart-fill" d="M0 65 C35 61 47 52 78 54 S125 34 158 40 S215 18 243 28 S286 8 320 13 L320 76 L0 76Z"/>
+                  <path class="chart-line" d="M0 65 C35 61 47 52 78 54 S125 34 158 40 S215 18 243 28 S286 8 320 13"/>
+                </svg>
+                <div class="days"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+              </div>
+            </section>
+
+            <div class="section-head"><h3 class="section-title">Today’s six</h3><span class="section-kicker">0/6 complete</span></div>
+            <div class="challenge-list">
+              <div class="challenge-row"><div class="game-icon">↯</div><div><h4>Duel Draw</h4><p>Reaction · best 284ms</p></div><div class="benchmark"><strong>Top 18%</strong><span>friends avg 342ms</span></div></div>
+              <div class="challenge-row"><div class="game-icon">◎</div><div><h4>Bullseye</h4><p>Precision · best 92%</p></div><div class="benchmark"><strong>20/30</strong><span>personal target</span></div></div>
+              <div class="challenge-row"><div class="game-icon">25</div><div><h4>Number Rush</h4><p>Speed · best 6.21s</p></div><div class="benchmark"><strong>7.10s</strong><span>friends avg</span></div></div>
+              <div class="challenge-row"><div class="game-icon">+−</div><div><h4>Quick Math</h4><p>Focus · best 20/20</p></div><div class="benchmark"><strong>18</strong><span>today’s target</span></div></div>
+            </div>
+            <button class="primary-btn" data-toast="Daily session started">Start today’s six</button>
+          </div>
+          <nav class="bottom-nav" aria-label="Main navigation">
+            <div class="nav-item active"><i class="nav-icon"></i><span>Today</span></div><div class="nav-item"><i class="nav-icon"></i><span>Season</span></div><div class="nav-item"><i class="nav-icon"></i><span>Ranking</span></div><div class="nav-item"><i class="nav-icon"></i><span>Shop</span></div><div class="nav-item"><i class="nav-icon"></i><span>Profile</span></div>
+          </nav>
+        </article>
+      </div>
+
+      <div class="device-wrap">
+        <div class="screen-label"><span>02 · Result</span><span>Progress feedback</span></div>
+        <article class="phone">
+          <div class="screen-inner">
+            <section class="result-header">
+              <div class="back-row"><button class="back" aria-label="Back">←</button><h2 class="result-title">Duel summary</h2><button class="back" aria-label="Share">↗</button></div>
+              <div class="result-score"><span class="personal-best">NEW PERSONAL BEST</span><div class="score">287<small>ms</small></div><div class="percentile"><strong>94TH</strong> PERCENTILE</div></div>
+            </section>
+
+            <div class="stat-grid">
+              <div class="stat-card"><span>ELO rating</span><strong>1385</strong><span class="positive">+24 today</span></div>
+              <div class="stat-card"><span>Win streak</span><strong>4</strong><span>best streak 7</span></div>
+            </div>
+
+            <section class="comparison">
+              <span class="mini-label">You vs your best</span>
+              <div class="compare-row"><strong>287ms · Today</strong><span>318ms · Previous</span></div>
+              <div class="track"><i></i></div>
+              <div class="compare-row"><span>200ms</span><span>400ms</span></div>
+            </section>
+
+            <section class="result-chart">
+              <div class="hero-top"><span class="mini-label">Reaction time · 30 days</span><span class="trend">−31ms</span></div>
+              <svg viewBox="0 0 320 110" preserveAspectRatio="none" aria-label="Thirty-day reaction trend">
+                <g class="chart-grid"><line x1="0" y1="20" x2="320" y2="20"/><line x1="0" y1="55" x2="320" y2="55"/><line x1="0" y1="90" x2="320" y2="90"/></g>
+                <path class="chart-line" d="M0 32 C20 39 32 27 48 44 S76 48 95 52 S127 40 145 55 S173 64 193 57 S220 68 238 65 S266 70 284 61 S302 47 320 51"/>
+                <circle cx="320" cy="51" r="5" fill="#ff5a1f"/>
+              </svg>
+            </section>
+
+            <div class="section-head"><h3 class="section-title">What changed</h3><span class="section-kicker">View analysis</span></div>
+            <div class="challenge-list">
+              <div class="challenge-row"><div class="game-icon">↗</div><div><h4>Faster decision</h4><p>You improved by 9.7% this month</p></div><div class="benchmark"><strong>+31ms</strong><span>gained</span></div></div>
+              <div class="challenge-row"><div class="game-icon">≋</div><div><h4>Consistency</h4><p>4 of your last 5 runs under 300ms</p></div><div class="benchmark"><strong>High</strong><span>confidence</span></div></div>
+            </div>
+            <div class="result-actions"><button class="secondary-btn" data-toast="Rematch queued">Rematch</button><button class="share-btn" data-toast="Result copied">Share result</button></div>
+          </div>
+          <nav class="bottom-nav" aria-label="Main navigation">
+            <div class="nav-item active"><i class="nav-icon"></i><span>Today</span></div><div class="nav-item"><i class="nav-icon"></i><span>Season</span></div><div class="nav-item"><i class="nav-icon"></i><span>Ranking</span></div><div class="nav-item"><i class="nav-icon"></i><span>Shop</span></div><div class="nav-item"><i class="nav-icon"></i><span>Profile</span></div>
+          </nav>
+        </article>
+      </div>
+
+      <div class="device-wrap">
+        <div class="screen-label"><span>03 · Community</span><span>Social motivation</span></div>
+        <article class="phone">
+          <div class="screen-inner">
+            <div class="appbar"><div class="brand"><div class="brand-mark"><span>↯</span></div><span>SKILL DUELS</span></div><button class="icon-btn" aria-label="Add rival">＋</button></div>
+            <h2 class="community-title">Community</h2>
+            <div class="tabs" role="tablist"><button class="tab" data-tab="global">Global</button><button class="tab active" data-tab="friends">Friends</button></div>
+
+            <div class="feed" id="friends-feed">
+              <article class="feed-item"><div class="feed-meta"><div class="person"><div class="avatar orange">MK</div><div><h4>Marcus K.</h4><p>New personal best · Duel Draw</p></div></div><span class="time">2h</span></div><div class="feed-result"><div><strong>242ms</strong><span>Top 7% · 6 day streak</span></div><button class="challenge-btn">Challenge</button></div></article>
+              <article class="feed-item duel-card"><div class="feed-meta"><div><span class="mini-label">Ranked duel · completed</span></div><span class="time">3h</span></div><div class="duel-line"><div class="duelist"><div class="avatar lime">YOU</div><span>1385</span></div><strong class="vs">2 — 1</strong><div class="duelist"><span>1320</span><div class="avatar">TR</div></div></div><div class="win">Victory · +24 ELO</div></article>
+              <article class="feed-item"><div class="feed-meta"><div class="person"><div class="avatar">JL</div><div><h4>Jenna L.</h4><p>Perfect run · Bullseye</p></div></div><span class="time">5h</span></div><div class="feed-result"><div><strong>30/30</strong><span>New personal best</span></div><button class="challenge-btn">Challenge</button></div></article>
+              <article class="feed-item"><div class="feed-meta"><div class="person"><div class="avatar orange">SD</div><div><h4>Sam D.</h4><p>Quick Math · Weekly milestone</p></div></div><span class="time">8h</span></div><div class="feed-result"><div><strong>20/20</strong><span>4 week improvement</span></div><button class="challenge-btn">Challenge</button></div></article>
+            </div>
+
+            <div class="feed" id="global-feed" hidden>
+              <article class="feed-item"><div class="feed-meta"><div class="person"><div class="avatar lime">01</div><div><h4>Math2Win</h4><p>Global leader · Diamond</p></div></div><span class="time">1620</span></div><div class="feed-result"><div><strong>#1</strong><span>8,940 season points</span></div><button class="challenge-btn">Challenge</button></div></article>
+              <article class="feed-item"><div class="feed-meta"><div class="person"><div class="avatar orange">08</div><div><h4>You</h4><p>Gold · 65 ELO to Platinum</p></div></div><span class="time">1385</span></div><div class="feed-result"><div><strong>#8</strong><span>Moving up · +3 this week</span></div><button class="challenge-btn sent">Your rank</button></div></article>
+            </div>
+          </div>
+          <nav class="bottom-nav" aria-label="Main navigation">
+            <div class="nav-item"><i class="nav-icon"></i><span>Today</span></div><div class="nav-item"><i class="nav-icon"></i><span>Season</span></div><div class="nav-item active"><i class="nav-icon"></i><span>Ranking</span></div><div class="nav-item"><i class="nav-icon"></i><span>Shop</span></div><div class="nav-item"><i class="nav-icon"></i><span>Profile</span></div>
+          </nav>
+        </article>
+      </div>
+    </section>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script>
+    const toast = document.querySelector('#toast');
+    let toastTimer;
+    const showToast = (message) => {
+      toast.textContent = message;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 1600);
+    };
+    document.querySelectorAll('[data-toast]').forEach(button => button.addEventListener('click', () => showToast(button.dataset.toast)));
+    document.querySelectorAll('.challenge-btn:not(.sent)').forEach(button => button.addEventListener('click', () => {
+      button.textContent = 'Sent';
+      button.classList.add('sent');
+      showToast('Challenge sent');
+    }));
+    document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(item => item.classList.toggle('active', item === tab));
+      document.querySelector('#friends-feed').hidden = tab.dataset.tab !== 'friends';
+      document.querySelector('#global-feed').hidden = tab.dataset.tab !== 'global';
+    }));
+  </script>
+</body>
+</html>
