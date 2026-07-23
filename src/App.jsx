@@ -2679,7 +2679,7 @@ export default function App() {
 
   // ONE unified score: Season Points. Everything feeds this. Ranking is derived from it.
   // Resets on the 1st of each month; top 3 earn cosmetic rewards.
-  const SEASON_BASE = 11840; // points already earned earlier this season
+  const SEASON_BASE = 0; // everyone starts the season from zero
   const gamePts = Object.values(playedGames).reduce((a, r) => a + r.pts, 0);
   const totalPts = gamePts + bonusPts;
   const seasonPts = SEASON_BASE + totalPts + challengeDelta;
@@ -2923,9 +2923,6 @@ export default function App() {
   const isReplay = activeGame && playedGames[activeGame];
   // Nothing is being recorded → the challenge should be new rather than the day's fixed one.
   const unscored = !!(practiceMode || isReplay);
-  // No friends system in Phase 1 — the friends list is intentionally empty
-  // (no fake bots). A real follow/friend feature is a later phase.
-  const friends = [];
 
   // Sections in orbit order — the header arrows and the orb menu both walk this list.
   const SECTIONS = [
