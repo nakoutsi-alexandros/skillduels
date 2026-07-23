@@ -3,3 +3,8 @@ dist
 .DS_Store
 *.local
 .vercel
+
+# Local secrets — never commit real Supabase keys. (.env.example IS committed.)
+.env
+.env.*
+!.env.example

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { hasSupabase, getOrCreateSession, getProfile, setNickname, saveScore, fetchLeaderboard, deleteAccount } from "./lib/supabase";
 
 // ================= v3 design tokens — neo-brutalist =================
 // Cream paper, ink outlines, hard offset shadows. Every surface is a sticker:
@@ -50,7 +51,60 @@ const sticker = (fill = T.card, shadow = T.shadowMd) => ({
 
 const FontImport = () => (
   <style>{`
-    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Archivo:wght@600;700;800;900&family=Manrope:wght@500;600;700;800&display=swap');
+    /* Self-hosted, OFL 1.1 — see public/fonts/OFL.txt. Nothing is fetched from Google
+       at runtime: dynamic Google Fonts embedding leaks every visitor's IP to Google
+       without consent (LG Muenchen I, 20 O 11/22). Keep these URLs same-origin.
+       All three ship as variable fonts, so one file per subset covers every weight. */
+    @font-face {
+      font-family: 'Archivo';
+      font-style: normal;
+      font-weight: 600 900;
+      font-stretch: 100%;
+      font-display: swap;
+      src: url('/fonts/archivo-latin.woff2') format('woff2');
+      unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+    @font-face {
+      font-family: 'Archivo';
+      font-style: normal;
+      font-weight: 600 900;
+      font-stretch: 100%;
+      font-display: swap;
+      src: url('/fonts/archivo-latin-ext.woff2') format('woff2');
+      unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+    }
+    @font-face {
+      font-family: 'Space Grotesk';
+      font-style: normal;
+      font-weight: 500 700;
+      font-display: swap;
+      src: url('/fonts/space-grotesk-latin.woff2') format('woff2');
+      unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+    @font-face {
+      font-family: 'Space Grotesk';
+      font-style: normal;
+      font-weight: 500 700;
+      font-display: swap;
+      src: url('/fonts/space-grotesk-latin-ext.woff2') format('woff2');
+      unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+    }
+    @font-face {
+      font-family: 'Manrope';
+      font-style: normal;
+      font-weight: 500 800;
+      font-display: swap;
+      src: url('/fonts/manrope-latin.woff2') format('woff2');
+      unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+    @font-face {
+      font-family: 'Manrope';
+      font-style: normal;
+      font-weight: 500 800;
+      font-display: swap;
+      src: url('/fonts/manrope-latin-ext.woff2') format('woff2');
+      unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+    }
     @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
     @keyframes pop { 0% { transform: scale(0.92); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
     @keyframes sheetup { 0% { transform: translateY(100%); } 100% { transform: translateY(0); } }
@@ -1733,11 +1787,30 @@ function PointsGuide() {
 }
 
 // ================= Onboarding =================
-function Onboarding({ onDone }) {
+function Onboarding({ onDone, onClaimNickname }) {
   const [step, setStep] = useState(0);
   const [avatar, setAvatar] = useState("knight");
-  const [name, setName] = useState("nak3d_alex");
+  const [name, setName] = useState("");
+  const [claiming, setClaiming] = useState(false);
+  const [nameErr, setNameErr] = useState(null);
   const next = () => { Sound.beep(720, 0.06); setStep((x) => x + 1); };
+
+  // Step-0 Continue: claim the nickname against the DB (unique + validated) before
+  // moving on. Success advances; a taken/invalid name shows an inline error.
+  const submitName = async () => {
+    if (!name.trim() || claiming) return;
+    setNameErr(null);
+    setClaiming(true);
+    const res = onClaimNickname ? await onClaimNickname(name.trim(), avatar) : { ok: true };
+    setClaiming(false);
+    if (res.ok) { next(); return; }
+    setNameErr(
+      res.error === "taken" ? "That nickname is taken — try another." :
+      res.error === "invalid" ? (res.message || "That nickname isn't allowed.") :
+      "Couldn't reserve that name. Check your connection and try again."
+    );
+    Sound.beep(200, 0.12);
+  };
 
   const GUIDE = [
     { icon: "bolt", color: T.blue, title: `${GAMES.length} games a day`, sub: "Reflex & brain challenges — the same for everyone, fresh at midnight" },
@@ -1772,12 +1845,31 @@ function Onboarding({ onDone }) {
             ))}
           </div>
           <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, alignSelf: "flex-start", letterSpacing: 0.3, marginBottom: 8 }}>USERNAME</div>
-          <input value={name} onChange={(e) => setName(e.target.value.slice(0, 16))} autoComplete="off"
-            style={{ width: "100%", padding: "15px 18px", borderRadius: 12, border: `${T.bw} solid ${INK}`,
+          <input value={name} onChange={(e) => { setName(e.target.value.slice(0, 16)); if (nameErr) setNameErr(null); }} autoComplete="off"
+            placeholder="pick a nickname"
+            style={{ width: "100%", padding: "15px 18px", borderRadius: 12,
+              border: `${T.bw} solid ${nameErr ? T.red : INK}`,
               background: T.card, color: INK, fontSize: 17, fontWeight: 700, fontFamily: T.mono, outline: "none",
-              marginBottom: 24, boxSizing: "border-box", boxShadow: T.shadowSm }} />
-          <BigButton onClick={() => name.trim() && next()}>Continue</BigButton>
+              marginBottom: 7, boxSizing: "border-box", boxShadow: T.shadowSm }} />
+          <div style={{ width: "100%", alignSelf: "flex-start", color: T.sub, fontSize: 11.5, fontWeight: 600,
+            lineHeight: 1.4, marginBottom: nameErr ? 10 : 22 }}>
+            This is public — don't use your real name.
+          </div>
+          {nameErr && (
+            <div style={{ width: "100%", ...sticker(T.red, T.shadowSm), borderRadius: 10, padding: "9px 13px",
+              marginBottom: 18, color: "#fff", fontSize: 12.5, fontWeight: 800, lineHeight: 1.35 }}>
+              {nameErr}
+            </div>
+          )}
+          <BigButton onClick={submitName}>{claiming ? "Checking…" : "Continue"}</BigButton>
           <div style={{ color: T.sub2, fontSize: 12, marginTop: 12 }}>No signup · play in 30 seconds</div>
+          <div style={{ color: T.sub, fontSize: 11.5, textAlign: "center", marginTop: 8, lineHeight: 1.5 }}>
+            By continuing you confirm you're 15 or older (or have a parent or guardian's consent) and agree to our{" "}
+            <a href="/terms.html" target="_blank" rel="noopener noreferrer"
+              style={{ color: T.blue, fontWeight: 800, textDecoration: "underline" }}>Terms</a>{" "}and{" "}
+            <a href="/privacy.html" target="_blank" rel="noopener noreferrer"
+              style={{ color: T.blue, fontWeight: 800, textDecoration: "underline" }}>Privacy Policy</a>
+          </div>
         </>
       )}
 
@@ -2196,8 +2288,11 @@ function TodayScreen({ playedGames, openGame, openPractice, onPractice, streak, 
   );
 }
 
-function SeasonScreen({ seasonPts, username, avatar, countdown, seasonName, onRewards }) {
-  const rows = [...BOTS.map((b) => ({ ...b })), { name: username, avatar, pts: seasonPts, me: true }].sort((a, b) => b.pts - a.pts);
+function SeasonScreen({ seasonPts, username, avatar, countdown, seasonName, onRewards, board = BOTS }) {
+  // `board` is the real leaderboard when Supabase is configured, otherwise BOTS.
+  // Filter out my own server row so I'm not listed twice next to my live "me" row.
+  const others = board.filter((b) => b.name !== username);
+  const rows = [...others.map((b) => ({ name: b.name, avatar: b.avatar, pts: b.pts })), { name: username, avatar, pts: seasonPts, me: true }].sort((a, b) => b.pts - a.pts);
   const myRank = rows.findIndex((r) => r.me) + 1;
   const toTop = myRank > 3 ? rows[2].pts - seasonPts : 0;
   return (
@@ -2280,11 +2375,20 @@ function SeasonScreen({ seasonPts, username, avatar, countdown, seasonName, onRe
   );
 }
 
-function LeaderboardScreen({ userEntry, onChallenge }) {
+function LeaderboardScreen({ userEntry, onChallenge, board = BOTS }) {
   const [filter, setFilter] = useState("global");
-  let rows = [...BOTS.map((b) => ({ ...b, me: false })), ...(userEntry ? [{ ...userEntry, me: true, friend: true }] : [])];
+  // `board` is real leaderboard rows { name, avatar, pts } when Supabase is on,
+  // else the BOTS demo set. Drop my own server row so my live "me" row is unique.
+  const others = board.filter((b) => !userEntry || b.name !== userEntry.name);
+  let rows = [...others.map((b) => ({ name: b.name, avatar: b.avatar, pts: b.pts, me: false })), ...(userEntry ? [{ ...userEntry, me: true }] : [])];
+  // No friends system in Phase 1 — real rows carry no `friend` flag, so this view
+  // shows just you. (ui-ux owns the empty-state copy.)
   if (filter === "friends") rows = rows.filter((r) => r.friend || r.me);
   rows.sort((a, b) => b.pts - a.pts);
+  // Phase 1 has no friend system, so the filtered set never carries a `friend`
+  // row — the tab would otherwise show just you and a lonely rival card. Show a
+  // warm empty state instead of a bare screen.
+  const noFriends = filter === "friends" && !rows.some((r) => r.friend);
 
   const myIdx = rows.findIndex((r) => r.me);
   const rival = myIdx > 0 ? rows[myIdx - 1] : null;
@@ -2304,6 +2408,24 @@ function LeaderboardScreen({ userEntry, onChallenge }) {
         ))}
       </div>
 
+      {noFriends ? (
+        /* Empty Friends tab — no friend system yet, so celebrate the solo climb
+           rather than showing a blank list. No invite button exists yet, so the
+           copy only teases it (an affordance that does nothing would be worse). */
+        <div style={{ ...sticker(T.card, T.shadow), borderRadius: 16, padding: "34px 24px",
+          textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 13 }}>
+          <div style={{ ...sticker(T.yellow, T.shadowSm), width: 62, height: 62, borderRadius: 16,
+            display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30 }}>👑</div>
+          <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 21, color: T.text,
+            textTransform: "uppercase", letterSpacing: "-0.01em", lineHeight: 1.05 }}>
+            A leaderboard of one
+          </div>
+          <div style={{ fontSize: 13, color: T.sub, fontWeight: 600, lineHeight: 1.45, maxWidth: 262 }}>
+            No friends here yet — so you're technically undefeated. Invites drop soon; enjoy the empty throne.
+          </div>
+        </div>
+      ) : (
+        <>
       {/* Rival gap */}
       <div style={{ ...sticker(T.yellow, T.shadowSm), borderRadius: 12, padding: "12px 14px", marginBottom: 14,
         display: "flex", alignItems: "center", gap: 11 }}>
@@ -2343,6 +2465,8 @@ function LeaderboardScreen({ userEntry, onChallenge }) {
           </div>
         ))}
       </div>
+        </>
+      )}
     </div>
   );
 }
@@ -2459,6 +2583,14 @@ function ProfileScreen({ elo, streak, playedGames, totalPts, duelRecord, openSet
         <span style={{ flex: 1, fontWeight: 800, fontSize: 14, color: T.text }}>Account & preferences</span>
         <Icon name="chevron" size={17} color={T.sub2} strokeWidth={3} />
       </button>
+
+      {/* Legal */}
+      <div style={{ display: "flex", justifyContent: "center", gap: 18, marginTop: 22 }}>
+        <a href="/privacy.html" target="_blank" rel="noopener noreferrer"
+          style={{ color: T.blue, fontWeight: 800, fontSize: 12.5, textDecoration: "underline" }}>Privacy Policy</a>
+        <a href="/terms.html" target="_blank" rel="noopener noreferrer"
+          style={{ color: T.blue, fontWeight: 800, fontSize: 12.5, textDecoration: "underline" }}>Terms of Service</a>
+      </div>
     </div>
   );
 }
@@ -2469,6 +2601,17 @@ export default function App() {
   const [username, setUsername] = useState("nak3d_alex");
   const [avatar, setAvatar] = useState("knight");
   const [soundOn, setSoundOn] = useState(true);
+
+  // ---- Backend (Supabase) --------------------------------------------------
+  // When keys are present we boot: create the silent anonymous session, load the
+  // profile (nickname) and the real leaderboard. While that runs we hold a
+  // loading gate so the UI never flashes the "nak3d_alex" defaults. With no keys
+  // `booting` is false immediately and the app runs on the in-memory BOTS path.
+  const [booting, setBooting] = useState(hasSupabase);
+  // `board` feeds every leaderboard/season/rank read. Defaults to the BOTS demo
+  // set (mapped to the { name, avatar, pts } shape) and is replaced with real
+  // rows when the fetch succeeds — so nothing breaks if the backend is absent.
+  const [board, setBoard] = useState(() => BOTS.map((b) => ({ name: b.name, avatar: b.avatar, pts: b.pts })));
 
   const [tab, setTab] = useState("today");
   const [menuOpen, setMenuOpen] = useState(false); // orb nav sheet
@@ -2508,6 +2651,9 @@ export default function App() {
   const [lastChallenge, setLastChallenge] = useState(0); // cooldown timestamp
   const [pickerOpen, setPickerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false); // delete-account confirm sub-state
+  const [deleting, setDeleting] = useState(false); // delete RPC in flight
+  const [deleteErr, setDeleteErr] = useState(null); // inline error on a failed delete
   const [shareOpen, setShareOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [practiceOpen, setPracticeOpen] = useState(false);
@@ -2539,13 +2685,70 @@ export default function App() {
   const seasonPts = SEASON_BASE + totalPts + challengeDelta;
   const balance = seasonPts; // same number everywhere
 
+  // Season key the backend stores scores under, e.g. "2026-07". Matches the
+  // monthly reset: a new month = a new key = a fresh scores row, old one kept.
+  const seasonKey = `${seasonEnd.getFullYear()}-${pad(new Date().getMonth() + 1)}`;
+
+  // ---- Boot: session → profile → leaderboard (runs once) -------------------
+  useEffect(() => {
+    if (!hasSupabase) return; // no keys → stay on the in-memory BOTS path
+    let alive = true;
+    (async () => {
+      await getOrCreateSession(); // silent anonymous account on first ever load
+      const profile = await getProfile();
+      if (alive && profile?.nickname) {
+        // Returning player: adopt their saved identity and skip onboarding.
+        setUsername(profile.nickname);
+        if (profile.avatar) setAvatar(profile.avatar);
+        setOnboarded(true);
+      }
+      const rows = await fetchLeaderboard(seasonKey);
+      if (alive && rows.length) setBoard(rows);
+      if (alive) setBooting(false);
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---- Persist Season Points (debounced) -----------------------------------
+  // Writes at most once per ~1.2s of quiet after the number changes, so a run
+  // that bumps several values doesn't fire a burst of saves. Only after the
+  // player has a nickname (is onboarded) and the backend is configured.
+  const saveTimer = useRef(null);
+  useEffect(() => {
+    if (!hasSupabase || !onboarded) return;
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => { saveScore(seasonKey, seasonPts); }, 1200);
+    return () => clearTimeout(saveTimer.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seasonPts, onboarded]);
+
   const showToast = (msg) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3200);
   };
 
+  // GDPR erasure. Deletes the auth user (CASCADEs to profile + scores) and signs
+  // the local session out. All app state is in-memory, so the honest "clean
+  // first-run" reset is a reload: boot re-runs, mints a FRESH anonymous account,
+  // finds no profile, and drops the user back on onboarding. Guarded so it never
+  // fires without a backend. Only reachable after an explicit in-app confirm.
+  const runDeleteAccount = async () => {
+    if (!hasSupabase || deleting) return;
+    setDeleteErr(null);
+    setDeleting(true);
+    const res = await deleteAccount();
+    if (res.ok) {
+      window.location.reload();
+      return;
+    }
+    setDeleting(false);
+    setDeleteErr("Couldn't delete your account. Check your connection and try again.");
+  };
+
   // Where you'd land on the season board with a given point total.
-  const rankAt = (pts) => [...BOTS.map((b) => b.pts), pts].sort((a, b) => b - a).indexOf(pts) + 1;
+  // Uses the real leaderboard (`board`) when present, BOTS otherwise.
+  const rankAt = (pts) => [...board.filter((b) => b.name !== username).map((b) => b.pts), pts].sort((a, b) => b - a).indexOf(pts) + 1;
 
   const finish = (raw, pts, label) => {
     if (practiceMode) {
@@ -2611,7 +2814,7 @@ export default function App() {
 
   // Rank across the season leaderboard (for the story card)
   const shareRank = (() => {
-    const rows = [...BOTS.map((b) => b.pts), seasonPts].sort((a, b) => b - a);
+    const rows = [...board.filter((b) => b.name !== username).map((b) => b.pts), seasonPts].sort((a, b) => b - a);
     return rows.indexOf(seasonPts) + 1;
   })();
 
@@ -2720,7 +2923,9 @@ export default function App() {
   const isReplay = activeGame && playedGames[activeGame];
   // Nothing is being recorded → the challenge should be new rather than the day's fixed one.
   const unscored = !!(practiceMode || isReplay);
-  const friends = BOTS.filter((b) => b.friend);
+  // No friends system in Phase 1 — the friends list is intentionally empty
+  // (no fake bots). A real follow/friend feature is a later phase.
+  const friends = [];
 
   // Sections in orbit order — the header arrows and the orb menu both walk this list.
   const SECTIONS = [
@@ -2774,9 +2979,37 @@ export default function App() {
     );
   };
 
+  // Loading gate: hold the app while the anonymous session + profile load so we
+  // never flash the default identity before the real one arrives.
+  if (booting)
+    return shell(
+      <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center",
+        justifyContent: "center", gap: 20, padding: 24 }}>
+        <BrandMark size={78} />
+        <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 26, letterSpacing: "-0.02em",
+          color: INK, textTransform: "uppercase" }}>Skill Duels</div>
+        <div style={{ ...sticker(T.yellow, T.shadowSm), borderRadius: 10, padding: "8px 16px",
+          fontFamily: T.mono, fontWeight: 700, fontSize: 12.5, color: INK, letterSpacing: 0.3 }}>
+          Loading…
+        </div>
+      </div>
+    );
+
   if (!onboarded)
     return shell(
       <Onboarding
+        // Claim the nickname against the DB when the player hits Continue. Returns
+        // a result the onboarding UI shows inline (taken / invalid). With no
+        // backend it resolves ok immediately and onboarding runs in-memory.
+        onClaimNickname={async (n, a) => {
+          const res = await setNickname(n, a);
+          if (res.ok || res.error === "offline") {
+            setUsername(n);
+            setAvatar(a);
+            return { ok: true };
+          }
+          return res; // { ok:false, error:"taken"|"invalid"|..., message }
+        }}
         onDone={(n, a) => {
           setUsername(n);
           setAvatar(a);
@@ -2900,8 +3133,8 @@ export default function App() {
                 username={username} avatar={avatar} coins={coins} elo={elo} />
             )}
             {tab === "season" && <SeasonScreen seasonPts={seasonPts} username={username} avatar={avatar}
-                countdown={countdown} seasonName={SEASON_NAME} onRewards={() => setRewardsOpen(true)} />}
-            {tab === "leaderboard" && <LeaderboardScreen userEntry={userEntry} onChallenge={openStake} />}
+                countdown={countdown} seasonName={SEASON_NAME} onRewards={() => setRewardsOpen(true)} board={board} />}
+            {tab === "leaderboard" && <LeaderboardScreen userEntry={userEntry} onChallenge={openStake} board={board} />}
             {tab === "shop" && <ShopScreen coins={coins} owned={owned} equipped={equipped}
               onBuy={buyCosmetic} onBuyCoins={buyCoins} onEquip={setEquipped} />}
             {tab === "profile" && (
@@ -3248,7 +3481,7 @@ export default function App() {
 
       {/* Settings sheet */}
       {settingsOpen && (
-        <Sheet onClose={() => setSettingsOpen(false)}>
+        <Sheet onClose={() => { setSettingsOpen(false); setConfirmDelete(false); setDeleteErr(null); }}>
           <div style={{ fontSize: 20, fontWeight: 700, fontFamily: T.display, marginBottom: 16 }}>Settings</div>
           <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, letterSpacing: 0.3, marginBottom: 8 }}>AVATAR</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 18 }}>
@@ -3278,7 +3511,45 @@ export default function App() {
             onClick={() => { setPlayedGames({}); setBonusPts(0); setRewardClaimed(false); setSettingsOpen(false); showToast("Day reset (demo)"); }}>
             <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}><Icon name="refresh" size={17} color={INK} strokeWidth={2.2} /> Reset day (demo)</span>
           </BigButton>
-          <div style={{ color: T.sub2, fontSize: 12, textAlign: "center" }}>Skill Duels · v3.0 prototype</div>
+
+          {/* Danger zone — GDPR erasure. Only shown with a real backend (there is no
+              account to delete on the offline BOTS path). A single tap opens a
+              confirm sub-state; deletion only fires on the explicit second tap. */}
+          {hasSupabase && (
+            <div style={{ marginTop: 10, marginBottom: 4, paddingTop: 16, borderTop: `${T.bw} solid ${T.card2}` }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.red, letterSpacing: 0.3, marginBottom: 8 }}>DANGER ZONE</div>
+              {!confirmDelete ? (
+                <BigButton color={T.red} onClick={() => { setDeleteErr(null); setConfirmDelete(true); Sound.beep(200, 0.1); }}>
+                  <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                    <Icon name="skull" size={17} color={inkOn(T.red)} strokeWidth={2.2} /> Delete my account
+                  </span>
+                </BigButton>
+              ) : (
+                <div style={{ ...sticker(T.card, T.shadowSm), borderRadius: 14, padding: "14px 16px" }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: INK, lineHeight: 1.4, marginBottom: 12 }}>
+                    Are you sure? This permanently deletes your account, nickname and scores. This cannot be undone.
+                  </div>
+                  {deleteErr && (
+                    <div style={{ ...sticker(T.red, T.shadowSm), borderRadius: 10, padding: "9px 13px", marginBottom: 12,
+                      color: inkOn(T.red), fontSize: 12.5, fontWeight: 800, lineHeight: 1.35 }}>
+                      {deleteErr}
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <BigButton color={T.card2} style={{ boxShadow: "none", border: `${T.bw} solid ${INK}` }}
+                      onClick={() => { if (!deleting) { setConfirmDelete(false); setDeleteErr(null); } }}>
+                      Cancel
+                    </BigButton>
+                    <BigButton color={T.red} onClick={runDeleteAccount}>
+                      {deleting ? "Deleting…" : "Delete forever"}
+                    </BigButton>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div style={{ color: T.sub2, fontSize: 12, textAlign: "center", marginTop: 14 }}>Skill Duels · v3.0 prototype</div>
         </Sheet>
       )}
 
