@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { hasSupabase, getOrCreateSession, getProfile, setNickname, saveScore, fetchLeaderboard, deleteAccount } from "./lib/supabase";
+import { hasSupabase, getOrCreateSession, getProfile, setNickname, saveScore, saveDailyRun, getDailyRun, fetchLeaderboard, deleteAccount } from "./lib/supabase";
 
 // ================= v3 design tokens — neo-brutalist =================
 // Cream paper, ink outlines, hard offset shadows. Every surface is a sticker:
@@ -2375,7 +2375,7 @@ function SeasonScreen({ seasonPts, username, avatar, countdown, seasonName, onRe
   );
 }
 
-function LeaderboardScreen({ userEntry, onChallenge, board = BOTS }) {
+function LeaderboardScreen({ userEntry, onChallenge, board = BOTS, onRefresh, refreshing }) {
   const [filter, setFilter] = useState("global");
   // `board` is real leaderboard rows { name, avatar, pts } when Supabase is on,
   // else the BOTS demo set. Drop my own server row so my live "me" row is unique.
@@ -2396,6 +2396,20 @@ function LeaderboardScreen({ userEntry, onChallenge, board = BOTS }) {
 
   return (
     <div style={{ paddingBottom: 130 }}>
+      {/* Pull latest rankings from the backend on demand. */}
+      {onRefresh && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+          <button onClick={onRefresh} disabled={refreshing}
+            style={{ ...sticker(T.card, T.shadowSm), borderRadius: 10, padding: "7px 12px",
+              cursor: refreshing ? "default" : "pointer", display: "flex", alignItems: "center", gap: 7,
+              fontFamily: T.display, fontWeight: 800, fontSize: 12, textTransform: "uppercase", color: T.text }}>
+            <span style={{ display: "inline-flex", animation: refreshing ? "spinSlow 0.7s linear infinite" : "none" }}>
+              <Icon name="refresh" size={15} color={INK} strokeWidth={2.2} />
+            </span>
+            {refreshing ? "Updating" : "Refresh"}
+          </button>
+        </div>
+      )}
       {/* Scope switch */}
       <div style={{ display: "flex", ...sticker(T.card, T.shadowMd), borderRadius: 12, padding: 4, marginBottom: 16 }}>
         {[["global", "Global"], ["friends", "Friends"]].map(([id, label]) => (
@@ -2608,10 +2622,17 @@ export default function App() {
   // loading gate so the UI never flashes the "nak3d_alex" defaults. With no keys
   // `booting` is false immediately and the app runs on the in-memory BOTS path.
   const [booting, setBooting] = useState(hasSupabase);
+  // `hydrated` gates the debounced saves. It stays false until boot has finished
+  // restoring today's run from the backend, so the save effects can NOT fire with
+  // the empty startup state (playedGames={}, challengeDelta=0) and clobber the
+  // real saved score with a lower value. Flips true once restore completes (or
+  // immediately when there is no backend to restore from).
+  const [hydrated, setHydrated] = useState(!hasSupabase);
   // `board` feeds every leaderboard/season/rank read. Defaults to the BOTS demo
   // set (mapped to the { name, avatar, pts } shape) and is replaced with real
   // rows when the fetch succeeds — so nothing breaks if the backend is absent.
   const [board, setBoard] = useState(() => BOTS.map((b) => ({ name: b.name, avatar: b.avatar, pts: b.pts })));
+  const [refreshingBoard, setRefreshingBoard] = useState(false);
 
   const [tab, setTab] = useState("today");
   const [menuOpen, setMenuOpen] = useState(false); // orb nav sheet
@@ -2689,6 +2710,13 @@ export default function App() {
   // monthly reset: a new month = a new key = a fresh scores row, old one kept.
   const seasonKey = `${seasonEnd.getFullYear()}-${pad(new Date().getMonth() + 1)}`;
 
+  // Day key the backend stores the daily run under, e.g. "2026-07-24". This is
+  // the SAME local-calendar "today" that daySeed() uses to pick the challenge, so
+  // a real new day gives a fresh (empty) run while a same-day refresh restores the
+  // locked run. Derived from `now` so it rolls over at local midnight.
+  const dayNow = new Date(now);
+  const dayKey = `${dayNow.getFullYear()}-${pad(dayNow.getMonth() + 1)}-${pad(dayNow.getDate())}`;
+
   // ---- Boot: session → profile → leaderboard (runs once) -------------------
   useEffect(() => {
     if (!hasSupabase) return; // no keys → stay on the in-memory BOTS path
@@ -2701,10 +2729,29 @@ export default function App() {
         setUsername(profile.nickname);
         if (profile.avatar) setAvatar(profile.avatar);
         setOnboarded(true);
+
+        // Restore TODAY'S run BEFORE `hydrated` flips true, so the debounced save
+        // effects (which are gated on `hydrated`) can never fire with the empty
+        // startup state and clobber the real saved score with a lower value. We
+        // restore every component that feeds today's Season Points — the played
+        // games, the +50 daily gift, and the net duel points — so the rebuilt
+        // seasonPts equals exactly what it was before the refresh (see the
+        // reconciliation note by the save effect below).
+        const d = new Date();
+        const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        const run = await getDailyRun(key);
+        if (alive && run && typeof run === "object") {
+          if (run.played && typeof run.played === "object") setPlayedGames(run.played);
+          if (typeof run.bonusPts === "number") setBonusPts(run.bonusPts);
+          if (typeof run.rewardClaimed === "boolean") setRewardClaimed(run.rewardClaimed);
+          if (typeof run.challengeDelta === "number") setChallengeDelta(run.challengeDelta);
+        }
       }
       const rows = await fetchLeaderboard(seasonKey);
       if (alive && rows.length) setBoard(rows);
-      if (alive) setBooting(false);
+      // Restore is done → open the save gate. Any state we just set has already
+      // been queued, so the first post-hydration save writes the correct total.
+      if (alive) { setHydrated(true); setBooting(false); }
     })();
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2716,16 +2763,47 @@ export default function App() {
   // player has a nickname (is onboarded) and the backend is configured.
   const saveTimer = useRef(null);
   useEffect(() => {
-    if (!hasSupabase || !onboarded) return;
+    if (!hasSupabase || !onboarded || !hydrated) return; // `hydrated` closes the boot clobber race
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => { saveScore(seasonKey, seasonPts); }, 1200);
     return () => clearTimeout(saveTimer.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seasonPts, onboarded]);
+  }, [seasonPts, onboarded, hydrated]);
+
+  // ---- Persist today's run (debounced) -------------------------------------
+  // Mirrors the score save above, but writes the daily RUN so a refresh restores
+  // it. RECONCILIATION: rather than persist challengeDelta on its own and risk the
+  // rebuilt seasonPts drifting below the saved score, we store the WHOLE run blob
+  // (played games + the +50 gift + net duel points) under today's day key. On
+  // boot we replay all of it before opening the save gate, so seasonPts is
+  // reconstructed identically and saveScore never writes a value lower than
+  // reality. Keyed by dayKey (YYYY-MM-DD) so a genuine new day starts empty while
+  // a same-day refresh restores the locked run. Same `hydrated` gate as above.
+  const runSaveTimer = useRef(null);
+  useEffect(() => {
+    if (!hasSupabase || !onboarded || !hydrated) return;
+    clearTimeout(runSaveTimer.current);
+    const run = { played: playedGames, bonusPts, rewardClaimed, challengeDelta };
+    const key = dayKey;
+    runSaveTimer.current = setTimeout(() => { saveDailyRun(key, run); }, 1200);
+    return () => clearTimeout(runSaveTimer.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playedGames, bonusPts, rewardClaimed, challengeDelta, onboarded, hydrated]);
 
   const showToast = (msg) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3200);
+  };
+
+  // Pull the latest rankings from the backend on demand. No-op offline (fetch
+  // returns [] → keep the current board). Guarded against overlapping taps.
+  const refreshBoard = async () => {
+    if (!hasSupabase || refreshingBoard) return;
+    setRefreshingBoard(true);
+    const rows = await fetchLeaderboard(seasonKey);
+    if (rows.length) setBoard(rows);
+    setRefreshingBoard(false);
+    showToast(rows.length ? "Rankings updated" : "Couldn't reach the leaderboard");
   };
 
   // GDPR erasure. Deletes the auth user (CASCADEs to profile + scores) and signs
@@ -3131,7 +3209,7 @@ export default function App() {
             )}
             {tab === "season" && <SeasonScreen seasonPts={seasonPts} username={username} avatar={avatar}
                 countdown={countdown} seasonName={SEASON_NAME} onRewards={() => setRewardsOpen(true)} board={board} />}
-            {tab === "leaderboard" && <LeaderboardScreen userEntry={userEntry} onChallenge={openStake} board={board} />}
+            {tab === "leaderboard" && <LeaderboardScreen userEntry={userEntry} onChallenge={openStake} board={board} onRefresh={refreshBoard} refreshing={refreshingBoard} />}
             {tab === "shop" && <ShopScreen coins={coins} owned={owned} equipped={equipped}
               onBuy={buyCosmetic} onBuyCoins={buyCoins} onEquip={setEquipped} />}
             {tab === "profile" && (

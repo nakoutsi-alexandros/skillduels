@@ -167,6 +167,73 @@ export async function saveScore(season, seasonPts) {
 }
 
 // ---------------------------------------------------------------------------
+// Save today's daily run. Upserts on (profile_id, day) so it overwrites the same
+// row every time rather than piling up. `run` is the whole daily-run blob the app
+// needs to restore a refresh intact: the played games + their scores, plus the
+// day's other Season-Points contributors that also reset at midnight (the +50
+// daily gift and the net duel points). Call this debounced from the UI.
+//   day: a "YYYY-MM-DD" string in the player's local calendar day
+//   run: a plain object, e.g. { played, bonusPts, rewardClaimed, challengeDelta }
+// ---------------------------------------------------------------------------
+export async function saveDailyRun(day, run) {
+  if (!supabase) return { ok: false, error: "offline" };
+  try {
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth?.user?.id;
+    if (!uid) return { ok: false, error: "offline" };
+
+    const { error } = await supabase.from("daily_runs").upsert(
+      {
+        profile_id: uid,
+        day,
+        games: run && typeof run === "object" ? run : {},
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "profile_id,day" }
+    );
+
+    if (error) {
+      console.warn("[supabase] saveDailyRun error:", error.message);
+      return { ok: false, error: "unknown", message: error.message };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "unknown", message: e?.message || String(e) };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Read today's daily run back. Returns the stored run blob (the object last
+// passed to saveDailyRun) or null when there is no row for this day yet — which
+// is exactly what a fresh new day should look like. Never throws.
+//   day: a "YYYY-MM-DD" string in the player's local calendar day
+// ---------------------------------------------------------------------------
+export async function getDailyRun(day) {
+  if (!supabase) return null;
+  try {
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth?.user?.id;
+    if (!uid) return null;
+
+    const { data, error } = await supabase
+      .from("daily_runs")
+      .select("games")
+      .eq("profile_id", uid)
+      .eq("day", day)
+      .maybeSingle();
+
+    if (error) {
+      console.warn("[supabase] getDailyRun error:", error.message);
+      return null;
+    }
+    return data?.games ?? null; // null when no row for today yet
+  } catch (e) {
+    console.warn("[supabase] getDailyRun error:", e?.message || e);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Fetch the public leaderboard for a season. Returns rows in the exact shape the
 // UI already uses for BOTS: { name, avatar, pts }. Empty array on any failure so
 // callers can fall back to BOTS.
