@@ -2473,7 +2473,7 @@ function LeaderboardScreen({ userEntry, onChallenge, board = BOTS, onRefresh, re
               <button className="pressable" onClick={() => onChallenge(r)}
                 style={{ border: `2px solid ${INK}`, background: T.red, color: "#fff", borderRadius: 8,
                   padding: "5px 9px", fontSize: 10.5, fontWeight: 800, fontFamily: T.font, cursor: "pointer", flexShrink: 0 }}>
-                BET
+                DUEL
               </button>
             )}
           </div>
@@ -3289,7 +3289,7 @@ export default function App() {
               <div style={{ fontSize: 18, fontWeight: 700, fontFamily: T.display, color: T.yellow }}>{balance} pts</div>
             </div>
           </div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, letterSpacing: 0.3, marginBottom: 10 }}>YOUR BET</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, letterSpacing: 0.3, marginBottom: 10 }}>YOUR STAKE</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
             {[50, 100, 200].map((amt) => {
               const afford = balance >= amt;
@@ -3306,7 +3306,7 @@ export default function App() {
             })}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, color: T.sub2, fontSize: 12, justifyContent: "center" }}>
-            <Icon name="shield" size={13} color={T.sub2} /> You can only bet points you have · 20s cooldown between challenges
+            <Icon name="shield" size={13} color={T.sub2} /> You can only stake points you have · 20s cooldown between challenges
           </div>
         </Sheet>
       )}
