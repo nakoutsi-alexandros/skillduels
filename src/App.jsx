@@ -1549,7 +1549,15 @@ function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "d
 
   // Opponent's points derived from their skill (lower ms skill = stronger → higher pts baseline).
   const oppScore = useRef((() => {
-    const base = Math.max(150, Math.min(920, Math.round(1000 - opponent.skill + (Math.random() * 120 - 60))));
+    // Real leaderboard opponents carry no per-game `skill` (the season view only
+    // exposes name/avatar/pts). Falling through to `1000 - undefined` = NaN made
+    // `myScore.pts > NaN` always false → you lost every duel. Derive a beatable
+    // target from their season pts instead: stronger players are tougher, but a
+    // good run still wins. (The real, server-validated duel replaces this.)
+    const skill = typeof opponent.skill === "number"
+      ? opponent.skill
+      : 620 - Math.min(300, Math.round((opponent.pts || 0) / 14));
+    const base = Math.max(150, Math.min(920, Math.round(1000 - skill + (Math.random() * 120 - 60))));
     const labels = {
       draw: `${Math.max(120, 1000 - base)} ms avg`,
       bullseye: `${Math.round(base / 10)}% accuracy`,
