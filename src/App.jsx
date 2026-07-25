@@ -1898,6 +1898,62 @@ function PointsGuide() {
   );
 }
 
+// Plain-player explainer for how duels work — kept short and scannable.
+// One icon + one line per row; a worked example at the foot. Shown on demand
+// (the ℹ buttons on the duel sheets) and auto-shown once on a player's first duel.
+const DUEL_STEPS = [
+  { icon: "swords",  color: T.blue,   title: "Challenge & stake",   line: "Pick a rival and stake 50, 100 or 200 Season Points." },
+  { icon: "bolt",    color: T.red,    title: "Same game, your turn", line: "You play one mini-game fresh, racing their real score from today." },
+  { icon: "trophy",  color: T.green,  title: "Winner takes the points", line: "Beat their score and you take the stake. Fall short and they take yours." },
+  { icon: "shield",  color: T.purple, title: "You're always protected", line: "A daily shield caps what you can lose at 300 pts, one hit per rival, never below 0." },
+  { icon: "target",  color: T.yellow, title: "Why some are greyed out", line: "You can only duel players who've played that game today." },
+  { icon: "coin",    color: T.blue,   title: "Skill, not gambling",  line: "Better score wins. Points are just a score — they can't be cashed out." },
+];
+
+function DuelGuide() {
+  return (
+    <div style={{ width: "100%" }}>
+      {DUEL_STEPS.map((r) => (
+        <div key={r.title} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0",
+          borderBottom: `2px solid ${INK}` }}>
+          <div style={{ width: 42, height: 42, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center",
+            flexShrink: 0, background: r.color, border: `${T.bw} solid ${INK}` }}>
+            <Icon name={r.icon} size={20} color={inkOn(r.color)} strokeWidth={2.2} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14.5, fontWeight: 700 }}>{r.title}</div>
+            <div style={{ color: T.sub, fontSize: 12.5, lineHeight: 1.35 }}>{r.line}</div>
+          </div>
+        </div>
+      ))}
+      {/* Worked example — the fastest way to make the mechanic click. */}
+      <div style={{ background: T.card2, border: `${T.bw} solid ${INK}`, borderRadius: 16,
+        padding: "12px 14px", marginTop: 14, fontSize: 13, fontWeight: 700, color: T.text, lineHeight: 1.7 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.3, color: T.sub, marginBottom: 4 }}>FOR EXAMPLE</div>
+        Stake <span style={{ color: T.text }}>100</span> → beat their score → <span style={{ color: T.green }}>+100 pts</span><br />
+        Stake <span style={{ color: T.text }}>100</span> → lose → <span style={{ color: T.red }}>−100 pts</span>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, color: T.sub2, fontSize: 12,
+        justifyContent: "center", marginTop: 12 }}>
+        <Icon name="bolt" size={13} color={T.sub2} /> 3 free duels a day · watch ads for up to 8
+      </div>
+    </div>
+  );
+}
+
+// Small "How it works" affordance that sits on the duel sheets and reopens the
+// explainer. Real hit target (>=28px), reads as a link but is a proper button.
+function DuelHelpLink({ onOpen }) {
+  return (
+    <button onClick={onOpen} className="pressable"
+      style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 5, cursor: "pointer",
+        padding: "6px 10px", minHeight: 30, borderRadius: 999, ...sticker(T.card, T.shadowSm),
+        fontSize: 12, fontWeight: 800, color: T.text, whiteSpace: "nowrap" }}>
+      <Icon name="help" size={14} color={T.red} strokeWidth={2.2} />How it works
+    </button>
+  );
+}
+
 // ================= Onboarding =================
 function Onboarding({ onDone, onClaimNickname }) {
   const [step, setStep] = useState(0);
@@ -1927,7 +1983,7 @@ function Onboarding({ onDone, onClaimNickname }) {
   const GUIDE = [
     { icon: "bolt", color: T.blue, title: `${GAMES.length} games a day`, sub: "Reflex & brain challenges — the same for everyone, fresh at midnight" },
     { icon: "flame", color: T.orange, title: "One shot each", sub: "Your first try is scored. After that, practice all you want." },
-    { icon: "swords", color: T.red, title: "Duel anyone 1v1", sub: "Bet your points, beat their score, take them" },
+    { icon: "swords", color: T.red, title: "Duel anyone 1v1", sub: "Stake your points, beat their score, take them" },
     { icon: "trophy", color: T.gold, title: "Climb the ranks", sub: "Daily leaderboard · monthly seasons · real rewards" },
   ];
 
@@ -2487,7 +2543,7 @@ function SeasonScreen({ seasonPts, username, avatar, countdown, seasonName, onRe
   );
 }
 
-function LeaderboardScreen({ userEntry, onChallenge, board = BOTS, onRefresh, refreshing, duelable = null, hasBackend = false }) {
+function LeaderboardScreen({ userEntry, onChallenge, onHelp, board = BOTS, onRefresh, refreshing, duelable = null, hasBackend = false }) {
   const [filter, setFilter] = useState("global");
   // `board` is real leaderboard rows { name, avatar, pts } when Supabase is on,
   // else the BOTS demo set. Drop my own server row so my live "me" row is unique.
@@ -2555,14 +2611,15 @@ function LeaderboardScreen({ userEntry, onChallenge, board = BOTS, onRefresh, re
       {/* Rival gap */}
       <div style={{ ...sticker(T.yellow, T.shadowSm), borderRadius: 12, padding: "12px 14px", marginBottom: 14,
         display: "flex", alignItems: "center", gap: 11 }}>
-        <span style={{ fontSize: 20 }}>🎯</span>
-        <div style={{ flex: 1, fontSize: 12.5, color: INK, fontWeight: 700, lineHeight: 1.25 }}>
+        <span style={{ fontSize: 20, flexShrink: 0 }}>🎯</span>
+        <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: INK, fontWeight: 700, lineHeight: 1.25 }}>
           {rival
             ? `${gap.toLocaleString()} pts behind ${rival.name} at #${myIdx}. Close it today.`
             : myIdx === 0
             ? "You're #1. Everyone below is coming for you."
             : "Play a duel to enter the ranking."}
         </div>
+        {onHelp && <DuelHelpLink onOpen={onHelp} />}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -2887,6 +2944,21 @@ export default function App() {
   const [deleteErr, setDeleteErr] = useState(null); // inline error on a failed delete
   const [shareOpen, setShareOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  // "How duels work" explainer. Openable on demand from the duel sheets, and
+  // auto-shown once on a player's first duel. `duelHelpThen` carries what to do
+  // after the auto-shown intro is dismissed (open the picker, or the stake sheet
+  // for a specific opponent) so the intro guides them straight into the flow.
+  const [duelHelpOpen, setDuelHelpOpen] = useState(false);
+  const [duelHelpThen, setDuelHelpThen] = useState(null);
+  // Whether this player has already seen the duel intro. One namespaced localStorage
+  // key — no tracking, no backend column — so it shows once and never nags again.
+  const [seenDuelIntro, setSeenDuelIntro] = useState(() => {
+    try { return localStorage.getItem("sd_seen_duel_intro") === "1"; } catch { return false; }
+  });
+  const markDuelIntroSeen = () => {
+    setSeenDuelIntro(true);
+    try { localStorage.setItem("sd_seen_duel_intro", "1"); } catch {}
+  };
   const [practiceOpen, setPracticeOpen] = useState(false);
   const [rewardsOpen, setRewardsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -3314,7 +3386,29 @@ export default function App() {
   const challengesLeft = FREE_CHALLENGES + adDuels - challengesUsed;
   const canWatchAd = !adCapReached; // still have ad slots today
 
+  // First-duel gate: on a player's very first duel action we show the explainer
+  // once, then continue into whatever they were about to do. `then` is "picker"
+  // (Today's Duel button) or an opponent object (a leaderboard row). Returns true
+  // when it intercepted, so callers bail and let the intro drive the flow.
+  const guardDuelIntro = (then) => {
+    if (seenDuelIntro) return false;
+    markDuelIntroSeen();
+    setDuelHelpThen(then);
+    setDuelHelpOpen(true);
+    return true;
+  };
+  // Dismiss the explainer and resume any pending flow it interrupted.
+  const closeDuelHelp = () => {
+    const then = duelHelpThen;
+    setDuelHelpOpen(false);
+    setDuelHelpThen(null);
+    if (then === "picker") setPickerOpen(true);
+    else if (then && typeof then === "object") openStake(then);
+  };
+
   const openStake = (opp) => {
+    if (guardDuelIntro(opp)) return; // first duel → explainer first, then resume
+
     if (challengesLeft <= 0) {
       if (adCapReached) { showToast("Daily duel limit reached — come back tomorrow"); return; }
       setAdPromptFor(opp); return;                                    // out of tries → offer ad
@@ -3645,13 +3739,13 @@ export default function App() {
                 openPractice={(id) => { setGameLive(false); setPracticeMode(true); setActiveGame(id); }}
                 onPractice={() => setPracticeOpen(true)}
                 countdown={countdown} rewardClaimed={rewardClaimed} claimReward={claimReward}
-                onShare={() => { setShareOpen(true); setCopied(false); }} onDuel={() => setPickerOpen(true)}
+                onShare={() => { setShareOpen(true); setCopied(false); }} onDuel={() => { if (!guardDuelIntro("picker")) setPickerOpen(true); }}
                 onHelp={() => setTab("shop")} balance={balance} challengesLeft={challengesLeft} onWatchAd={() => watchAdDirect()} canWatchAd={canWatchAd} adSlotsLeft={MAX_AD_DUELS - adDuels}
                 username={username} avatar={avatar} coins={coins} elo={elo} />
             )}
             {tab === "season" && <SeasonScreen seasonPts={seasonPts} username={username} avatar={avatar}
                 countdown={countdown} seasonName={SEASON_NAME} onRewards={() => setRewardsOpen(true)} board={board} />}
-            {tab === "leaderboard" && <LeaderboardScreen userEntry={userEntry} onChallenge={openStake} board={board} onRefresh={refreshBoard} refreshing={refreshingBoard} duelable={duelableByName} hasBackend={hasSupabase} />}
+            {tab === "leaderboard" && <LeaderboardScreen userEntry={userEntry} onChallenge={openStake} onHelp={() => { setDuelHelpThen(null); setDuelHelpOpen(true); }} board={board} onRefresh={refreshBoard} refreshing={refreshingBoard} duelable={duelableByName} hasBackend={hasSupabase} />}
             {tab === "shop" && <ShopScreen coins={coins} owned={owned} equipped={equipped}
               onBuy={buyCosmetic} onBuyCoins={buyCoins} onEquip={setEquipped} />}
             {tab === "profile" && (
@@ -3685,8 +3779,11 @@ export default function App() {
         const targets = hasSupabase ? Object.values(duelableByName) : null;
         return (
         <Sheet onClose={() => setPickerOpen(false)}>
-          <div style={{ fontSize: 20, fontWeight: 700, fontFamily: T.display, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}><Icon name="swords" size={20} color={T.red} />Pick opponent</div>
-          <div style={{ color: T.sub, fontSize: 13, marginBottom: 16 }}>Ranked · bet points · winner takes the stake</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <div style={{ flex: 1, minWidth: 0, fontSize: 20, fontWeight: 700, fontFamily: T.display, display: "flex", alignItems: "center", gap: 8 }}><Icon name="swords" size={20} color={T.red} />Pick opponent</div>
+            <DuelHelpLink onOpen={() => { setDuelHelpThen(null); setDuelHelpOpen(true); }} />
+          </div>
+          <div style={{ color: T.sub, fontSize: 13, marginBottom: 16 }}>Ranked · stake points · winner takes the stake</div>
           {hasSupabase ? (
             duelableLoading && !targets.length ? (
               <div style={{ textAlign: "center", color: T.sub, fontSize: 13, padding: "26px 0" }}>Finding opponents…</div>
@@ -3700,7 +3797,7 @@ export default function App() {
                     <div style={{ fontWeight: 700, fontSize: 15 }}>{f.name}</div>
                     <div style={{ color: T.sub, fontSize: 12 }}>{f.pts} pts · duelable on {Object.keys(f.games).length} game{Object.keys(f.games).length === 1 ? "" : "s"} today</div>
                   </div>
-                  <Pill color={T.red}>Bet</Pill>
+                  <Pill color={T.red}>Stake</Pill>
                 </div>
               ))
             ) : (
@@ -3723,7 +3820,7 @@ export default function App() {
                   <div style={{ fontWeight: 700, fontSize: 15, display: "flex", alignItems: "center", gap: 6 }}>{f.name} {f.friend && <Icon name="users" size={12} color={T.sub2} strokeWidth={2.1} />}</div>
                   <div style={{ color: T.sub, fontSize: 12 }}>~{f.skill} ms average · {f.pts} pts</div>
                 </div>
-                <Pill color={T.red}>Bet</Pill>
+                <Pill color={T.red}>Stake</Pill>
               </div>
             ))
           )}
@@ -3734,11 +3831,14 @@ export default function App() {
       {/* Stake selection sheet */}
       {stakeFor && (
         <Sheet onClose={() => setStakeFor(null)}>
-          <div style={{ fontSize: 20, fontWeight: 700, fontFamily: T.display, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
-            <Icon name="swords" size={20} color={T.red} />Set your bet
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <div style={{ flex: 1, minWidth: 0, fontSize: 20, fontWeight: 700, fontFamily: T.display, display: "flex", alignItems: "center", gap: 8 }}>
+              <Icon name="swords" size={20} color={T.red} />Set your stake
+            </div>
+            <DuelHelpLink onOpen={() => { setDuelHelpThen(null); setDuelHelpOpen(true); }} />
           </div>
           <div style={{ color: T.sub, fontSize: 13, marginBottom: 14 }}>
-            vs <b style={{ color: T.text }}>{stakeFor.name}</b> · pick a game, then your bet. Win to steal it, lose and you pay.
+            vs <b style={{ color: T.text }}>{stakeFor.name}</b> · pick a game, then your stake. Win to steal it, lose and you pay.
           </div>
 
           {/* Game picker — server path shows ONLY the games this defender actually
@@ -3799,7 +3899,7 @@ export default function App() {
             })}
           </div>
           {!pickGame && (
-            <div style={{ textAlign: "center", color: T.sub2, fontSize: 12, marginBottom: 8 }}>Pick a game above to set your bet.</div>
+            <div style={{ textAlign: "center", color: T.sub2, fontSize: 12, marginBottom: 8 }}>Pick a game above to set your stake.</div>
           )}
           <div style={{ display: "flex", alignItems: "center", gap: 8, color: T.sub2, fontSize: 12, justifyContent: "center" }}>
             <Icon name="shield" size={13} color={T.sub2} /> You can only stake points you have · 20s cooldown between challenges
@@ -3991,6 +4091,19 @@ export default function App() {
           <PointsGuide />
           <div style={{ height: 16 }} />
           <BigButton onClick={() => setHelpOpen(false)}>Got it</BigButton>
+        </Sheet>
+      )}
+
+      {/* How duels work — the plain-player explainer */}
+      {duelHelpOpen && (
+        <Sheet onClose={closeDuelHelp}>
+          <div style={{ fontSize: 20, fontWeight: 700, fontFamily: T.display, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
+            <Icon name="swords" size={20} color={T.red} />How duels work
+          </div>
+          <div style={{ color: T.sub, fontSize: 13, marginBottom: 12 }}>Stake points, out-play a real rival, take the win</div>
+          <DuelGuide />
+          <div style={{ height: 16 }} />
+          <BigButton color={T.red} onClick={closeDuelHelp}>Got it</BigButton>
         </Sheet>
       )}
 
