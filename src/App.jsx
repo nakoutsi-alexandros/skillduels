@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { hasSupabase, getOrCreateSession, getProfile, setNickname, saveScore, saveDailyRun, getDailyRun, fetchLeaderboard, deleteAccount } from "./lib/supabase";
+import { hasSupabase, getOrCreateSession, getProfile, setNickname, saveScore, saveDailyRun, getDailyRun, fetchLeaderboard, deleteAccount, recordGameScore, getDuelableTargets, startDuel, settleDuel, getNotifications, markNotificationsRead } from "./lib/supabase";
 
 // ================= v3 design tokens — neo-brutalist =================
 // Cream paper, ink outlines, hard offset shadows. Every surface is a sticker:
@@ -1532,12 +1532,40 @@ function QuickMathGame({ onFinish, onBegin, fresh }) {
   );
 }
 
+// Friendly text for every settle/eligibility error code the backend can return.
+// Used by the duel result screen and by App's stake/pre-flight guards. Kept at
+// module scope so both share ONE mapping and can never drift.
+const duelErrText = (code) => ({
+  out_of_band: "That player is out of your matchmaking range now.",
+  shielded: "That player is shielded right now — no points to take.",
+  graced: "That player is too new to duel yet.",
+  cooldown: "You already dueled this player today.",
+  pair_cooldown: "You already dueled this player today.",
+  no_target_score: "That player hasn't played this game today.",
+  self: "You can't duel yourself.",
+  bad_stake: "That stake isn't allowed.",
+  not_authenticated: "You need to be signed in to duel.",
+  offline: "Duels need a connection — try again in a moment.",
+  rejected: "That result looked off and was rejected.",
+  unavailable: "That player isn't duelable right now.",
+}[code] || "Couldn't settle the duel — no points changed.");
+
 // ================= 1v1 Duel =================
-function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "draw" }) {
-  const [phase, setPhase] = useState("vs"); // vs | play | result
+// Two modes:
+//   * SERVER mode (onSettle provided): the challenger plays a FRESH attempt and the
+//     SERVER decides win/loss and moves points. The client sends only `raw`; it
+//     renders whatever verdict comes back and NEVER computes points itself.
+//   * OFFLINE fallback (no onSettle): the old fake-oppScore path, so the app still
+//     works with no backend / no keys. Points here are display-only.
+function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "draw", onSettle = null, target = null }) {
+  const [phase, setPhase] = useState("vs"); // vs | play | settling | result | error
   const [count, setCount] = useState(3);
   const [myScore, setMyScore] = useState(null);   // {raw, pts, label}
+  const [verdict, setVerdict] = useState(null);    // server verdict object (server mode)
+  const [errCode, setErrCode] = useState(null);    // settle/eligibility error code (server mode)
+  const settling = useRef(false);                  // guard: settle exactly once
   const game = GAMES.find((g) => g.id === gameId) || GAMES[0];
+  const server = typeof onSettle === "function";
 
   useEffect(() => {
     if (phase !== "vs") return;
@@ -1547,13 +1575,9 @@ function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "d
     return () => clearTimeout(t);
   }, [count, phase]);
 
-  // Opponent's points derived from their skill (lower ms skill = stronger → higher pts baseline).
+  // OFFLINE-ONLY opponent score. Derived from the opponent's season pts so a good
+  // run can still win. Never used in server mode — the server owns the verdict.
   const oppScore = useRef((() => {
-    // Real leaderboard opponents carry no per-game `skill` (the season view only
-    // exposes name/avatar/pts). Falling through to `1000 - undefined` = NaN made
-    // `myScore.pts > NaN` always false → you lost every duel. Derive a beatable
-    // target from their season pts instead: stronger players are tougher, but a
-    // good run still wins. (The real, server-validated duel replaces this.)
     const skill = typeof opponent.skill === "number"
       ? opponent.skill
       : 620 - Math.min(300, Math.round((opponent.pts || 0) / 14));
@@ -1569,14 +1593,35 @@ function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "d
     return { pts: base, label: labels[gameId] || `${base} pts` };
   })());
 
-  const finishPlay = (raw, pts, label) => {
+  const finishPlay = async (raw, pts, label) => {
     setMyScore({ raw, pts, label });
-    setPhase("result");
-    const won = pts > oppScore.current.pts;
-    setTimeout(() => (won ? Sound.win() : Sound.lose()), 300);
+    if (server) {
+      if (settling.current) return; // never settle twice
+      settling.current = true;
+      setPhase("settling");
+      let v;
+      try {
+        v = await onSettle({ raw, pts, label });
+      } catch (e) {
+        v = { ok: false, error: "unknown" };
+      }
+      if (!v || v.ok === false) {
+        setErrCode(v && v.error ? v.error : "unknown");
+        setPhase("error");
+        return;
+      }
+      setVerdict(v);
+      setPhase("result");
+      setTimeout(() => (v.won ? Sound.win() : Sound.lose()), 300);
+    } else {
+      setPhase("result");
+      const won = pts > oppScore.current.pts;
+      setTimeout(() => (won ? Sound.win() : Sound.lose()), 300);
+    }
   };
 
-  if (phase === "vs")
+  if (phase === "vs") {
+    const toBeat = server && target && target.snapshotLabel;
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20, paddingTop: 30 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
@@ -1593,6 +1638,11 @@ function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "d
         <div style={{ display: "inline-flex", alignItems: "center", gap: 8, color: T.sub, fontSize: 14 }}>
           <Icon name={game.icon} size={16} color={game.color} /> {game.name} · best score wins
         </div>
+        {toBeat && (
+          <div style={{ ...sticker(T.card, T.shadowSm), borderRadius: 10, padding: "7px 13px", fontSize: 13, fontWeight: 800, color: T.text }}>
+            Score to beat: <span style={{ color: T.red }}>{target.snapshotLabel}</span>
+          </div>
+        )}
         {stake > 0 && (
           <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: T.yellow,
             border: `1px solid ${T.yellow}44`, borderRadius: 999, padding: "6px 14px", color: T.yellow, fontSize: 14, fontWeight: 600 }}>
@@ -1602,22 +1652,68 @@ function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "d
         <div style={{ fontSize: 64, fontWeight: 700, color: T.yellow, fontFamily: T.display }}>{count > 0 ? count : "GO!"}</div>
       </div>
     );
+  }
 
   if (phase === "play") {
     const on = (raw, pts, label) => finishPlay(raw, pts, label);
+    // fresh={true} ALWAYS for duels. A duel is a separate, unscored attempt — it
+    // must NOT reuse daySeed's grid (the one the challenger already memorized in
+    // their own daily run). Passing fresh makes each seeded game draw a random
+    // seed (runSeed → Math.random), closing the replay-a-memorized-grid exploit
+    // once duel points are real. (Bullseye carries no seed, so fresh is a no-op
+    // there — passed for consistency.)
     return (
       <div>
-        {gameId === "draw" && <DuelDrawGame rounds={3} onFinish={on} />}
-        {gameId === "bullseye" && <BullseyeGame rounds={3} onFinish={on} />}
-        {gameId === "numbers" && <NumberRushGame onFinish={on} />}
-        {gameId === "oddone" && <OddOneGame onFinish={on} />}
-        {gameId === "chimp" && <ChimpGame onFinish={on} />}
-        {gameId === "quickmath" && <QuickMathGame onFinish={on} />}
+        {gameId === "draw" && <DuelDrawGame rounds={3} onFinish={on} fresh />}
+        {gameId === "bullseye" && <BullseyeGame rounds={3} onFinish={on} fresh />}
+        {gameId === "numbers" && <NumberRushGame onFinish={on} fresh />}
+        {gameId === "oddone" && <OddOneGame onFinish={on} fresh />}
+        {gameId === "chimp" && <ChimpGame onFinish={on} fresh />}
+        {gameId === "quickmath" && <QuickMathGame onFinish={on} fresh />}
       </div>
     );
   }
 
-  const won = myScore.pts > oppScore.current.pts;
+  if (phase === "settling") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, paddingTop: 50 }}>
+        <div style={{ display: "inline-flex", animation: "spinSlow 0.7s linear infinite" }}>
+          <Icon name="swords" size={40} color={T.red} strokeWidth={2.2} />
+        </div>
+        <div style={{ fontSize: 18, fontWeight: 800, fontFamily: T.display, color: T.text }}>Settling duel…</div>
+        <div style={{ color: T.sub, fontSize: 13, textAlign: "center", maxWidth: 240 }}>
+          Checking your run against {opponent.name}'s score on the server.
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === "error") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, paddingTop: 30 }}>
+        <div style={{ width: 88, height: 88, borderRadius: 28, display: "flex", alignItems: "center", justifyContent: "center",
+          ...sticker(T.card2, "none") }}>
+          <Icon name="shield" size={40} color={T.sub} strokeWidth={2} />
+        </div>
+        <div style={{ fontSize: 22, fontWeight: 900, color: T.text, fontFamily: T.display, textTransform: "uppercase" }}>No result</div>
+        <Card style={{ width: "100%", textAlign: "center" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: T.text, lineHeight: 1.4 }}>{duelErrText(errCode)}</div>
+          <div style={{ color: T.sub, fontSize: 12, marginTop: 8 }}>No points changed hands.</div>
+        </Card>
+        <BigButton onClick={() => onDone({ error: true, message: duelErrText(errCode) })}>Continue</BigButton>
+      </div>
+    );
+  }
+
+  // ---- result --------------------------------------------------------------
+  const won = server ? !!verdict.won : myScore.pts > oppScore.current.pts;
+  const oppLabel = server ? verdict.defender_label : oppScore.current.label;
+  const moved = server ? (Number(verdict.transferred) || 0) : stake;
+  const partial = server ? (won && moved < stake) : false;
+  const doneArg = server
+    ? { won, transferred: moved, partial: !!verdict.partial || partial, stake }
+    : { won, transferred: stake, partial: false, offline: true };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, paddingTop: 20 }}>
       <div style={{ width: 88, height: 88, borderRadius: 28, display: "flex", alignItems: "center", justifyContent: "center",
@@ -1634,23 +1730,31 @@ function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "d
         </div>
         <div>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 4 }}><Avatar id={opponent.avatar} size={40} /></div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: !won ? T.green : T.text }}>{oppScore.current.label}</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: !won ? T.green : T.text }}>{oppLabel}</div>
           <div style={{ color: T.sub, fontSize: 12 }}>{opponent.name}</div>
         </div>
       </Card>
       {stake > 0 ? (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
           <div style={{ fontSize: 30, fontWeight: 700, fontFamily: T.display, color: won ? T.green : T.red }}>
-            {won ? "+" : "−"}{stake} pts
+            {won ? "+" : "−"}{moved} pts
           </div>
-          <div style={{ color: T.sub, fontSize: 13 }}>
-            {won ? `You took ${stake} points from ${opponent.name}` : `${opponent.name} took ${stake} points from you`}
+          <div style={{ color: T.sub, fontSize: 13, textAlign: "center", maxWidth: 280 }}>
+            {won
+              ? (moved === 0
+                  ? `${opponent.name} was shielded — you won, but there were no points to take`
+                  : partial
+                    ? `You took ${moved} of ${stake} from ${opponent.name} (their shield/floor capped it)`
+                    : `You took ${moved} points from ${opponent.name}`)
+              : (moved === 0
+                  ? `You had no points to lose`
+                  : `${opponent.name} took ${moved} points from you`)}
           </div>
         </div>
       ) : (
         won && <Pill color={T.yellow}>+40 pts</Pill>
       )}
-      <BigButton onClick={() => onDone(won)}>Continue</BigButton>
+      <BigButton onClick={() => onDone(doneArg)}>Continue</BigButton>
     </div>
   );
 }
@@ -2383,7 +2487,7 @@ function SeasonScreen({ seasonPts, username, avatar, countdown, seasonName, onRe
   );
 }
 
-function LeaderboardScreen({ userEntry, onChallenge, board = BOTS, onRefresh, refreshing }) {
+function LeaderboardScreen({ userEntry, onChallenge, board = BOTS, onRefresh, refreshing, duelable = null, hasBackend = false }) {
   const [filter, setFilter] = useState("global");
   // `board` is real leaderboard rows { name, avatar, pts } when Supabase is on,
   // else the BOTS demo set. Drop my own server row so my live "me" row is unique.
@@ -2477,13 +2581,22 @@ function LeaderboardScreen({ userEntry, onChallenge, board = BOTS, onRefresh, re
                 {r.pts.toLocaleString()}
               </div>
             </div>
-            {!r.me && (
-              <button className="pressable" onClick={() => onChallenge(r)}
-                style={{ border: `2px solid ${INK}`, background: T.red, color: "#fff", borderRadius: 8,
-                  padding: "5px 9px", fontSize: 10.5, fontWeight: 800, fontFamily: T.font, cursor: "pointer", flexShrink: 0 }}>
-                DUEL
-              </button>
-            )}
+            {!r.me && (() => {
+              // Server path: only players in the duelable set are selectable. Others
+              // are greyed with a short reason (the RPC only returns eligible players,
+              // so we can't distinguish shield vs cooldown vs no-score here — the
+              // honest generic reason covers all three). Offline path stays enabled.
+              const eligible = !hasBackend || (duelable && duelable[r.name] && Object.keys(duelable[r.name].games).length);
+              return (
+                <button className="pressable" onClick={() => onChallenge(r)}
+                  title={eligible ? "Challenge to a duel" : "Not duelable today — hasn't played, shielded, or on cooldown"}
+                  style={{ border: `2px solid ${eligible ? INK : T.sub2}`, background: eligible ? T.red : T.card2,
+                    color: eligible ? "#fff" : T.sub2, borderRadius: 8, padding: "5px 9px", fontSize: 10.5, fontWeight: 800,
+                    fontFamily: T.font, cursor: "pointer", flexShrink: 0, opacity: eligible ? 1 : 0.7 }}>
+                  DUEL
+                </button>
+              );
+            })()}
           </div>
         ))}
       </div>
@@ -2617,6 +2730,72 @@ function ProfileScreen({ elo, streak, playedGames, totalPts, duelRecord, openSet
   );
 }
 
+// "Someone beat you in a duel" news. Reuses the activity-feed sticker look. Shown
+// when there are unread duel_lost notifications; marks them read on mount (so the
+// unread badge clears) and offers an optional "Duel back" when the attacker is
+// currently duelable. Points are NOT changed here — the server already moved them.
+function DuelNewsBanner({ notifs, duelable, onDuelBack, onDismiss, onMarkRead }) {
+  useEffect(() => {
+    if (notifs.length) onMarkRead(notifs.map((n) => n.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  if (!notifs.length) return null;
+  return (
+    <div style={{ ...sticker(T.card, T.shadowMd), borderRadius: 14, padding: 14, marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: T.display, fontWeight: 900, fontSize: 15,
+          textTransform: "uppercase", color: T.text }}>
+          <Icon name="swords" size={16} color={T.red} /> Duel news
+        </div>
+        <button onClick={onDismiss} className="pressable"
+          style={{ border: "none", background: "transparent", cursor: "pointer", color: T.sub, display: "flex" }}>
+          <Icon name="x" size={16} color={T.sub} strokeWidth={2.6} />
+        </button>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {notifs.map((n) => {
+          const p = n.payload || {};
+          const defended = n.type === "duel_defended";
+          // "Duel back" only makes sense after a LOSS; a successful defence needs no
+          // rematch. Offer it only when it's a loss and the attacker is duelable now.
+          const back = !defended && duelable && duelable[p.attacker_name];
+          const game = GAMES.find((g) => g.id === p.game);
+          return (
+            <div key={n.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Avatar id={p.attacker_avatar || "knight"} size={34} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: T.text, lineHeight: 1.3 }}>
+                  {defended ? (
+                    <>
+                      <b>{p.attacker_name || "Someone"}</b> challenged you{game ? ` at ${game.name}` : ""} and lost — you defended,{" "}
+                      <b style={{ color: T.green }}>+{p.points} pts</b>
+                    </>
+                  ) : (
+                    <>
+                      <b>{p.attacker_name || "Someone"}</b> beat you{game ? ` at ${game.name}` : ""} — took {p.points} pts{p.partial ? " (partial)" : ""}
+                    </>
+                  )}
+                </div>
+              </div>
+              {defended ? (
+                <span style={{ fontSize: 10.5, fontWeight: 800, color: T.green, flexShrink: 0 }}>DEFENDED</span>
+              ) : back ? (
+                <button onClick={() => onDuelBack(back)} className="pressable"
+                  style={{ border: `2px solid ${INK}`, background: T.red, color: "#fff", borderRadius: 8, padding: "5px 9px",
+                    fontSize: 10.5, fontWeight: 800, fontFamily: T.font, cursor: "pointer", flexShrink: 0 }}>
+                  DUEL BACK
+                </button>
+              ) : (
+                <span style={{ fontSize: 10.5, fontWeight: 800, color: T.sub2, flexShrink: 0 }}>—</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ================= App =================
 export default function App() {
   const [onboarded, setOnboarded] = useState(false);
@@ -2658,9 +2837,32 @@ export default function App() {
   const [duelRecord, setDuelRecord] = useState({ w: 0, l: 0 });
   const [duelOpp, setDuelOpp] = useState(null); // opponent object while dueling
   const [duelStake, setDuelStake] = useState(0);
-  const [duelGame, setDuelGame] = useState("reaction");
-  const [pickGame, setPickGame] = useState("reaction");
-  const [challengeDelta, setChallengeDelta] = useState(0); // net points won/lost via challenges
+  const [duelGame, setDuelGame] = useState("draw");
+  const [pickGame, setPickGame] = useState(null); // chosen game in the stake sheet (null until picked)
+  const [duelTarget, setDuelTarget] = useState(null); // resolved server duel target { defenderId, name, avatar, snapshotPts, snapshotLabel }
+  // Cross-player duelability, keyed by nickname → { defenderId, name, avatar, pts,
+  // games: { [gameId]: { snapshotPts, snapshotLabel } } }. Only players who scored a
+  // game today AND pass the server's band/shield/grace/cooldown checks appear here;
+  // everyone else is non-selectable in the UI. Empty on the offline (BOTS) path.
+  const [duelableByName, setDuelableByName] = useState({});
+  const [duelableLoading, setDuelableLoading] = useState(false);
+  const [duelNotifs, setDuelNotifs] = useState([]); // unread "you got dueled" notifications to surface
+  const [challengeDelta, setChallengeDelta] = useState(0); // net points won/lost via challenges (OUTGOING duels we started)
+  // INCOMING duels: the NET Season-Points change from duels OTHER players started
+  // against us while we were passive. Two directions, both server-authoritative and
+  // both recorded ONLY as a notification the client must reconcile:
+  //   'duel_lost'     → an attacker beat our score and took points (−).
+  //   'duel_defended' → an attacker challenged and lost; we won their forfeited
+  //                     stake (+).
+  // The client learns of them no other way, so we mirror the net here (a signed
+  // delta) and fold it into seasonPts, so our own debounced saveScore re-writes the
+  // SAME transferred total and can never revert the server's move — which in the
+  // loss direction would create points from nothing (inflation) and in the defence
+  // direction would destroy the attacker's forfeited stake (deflation). Derived
+  // AUTHORITATIVELY from today's notifications (see reconcileIncoming), so it is
+  // idempotent and can never double-count. Persisted in the daily run blob to
+  // bridge boot before the first reconcile returns.
+  const [incomingDelta, setIncomingDelta] = useState(0);
   const [challengesUsed, setChallengesUsed] = useState(0);
   const [adDuels, setAdDuels] = useState(0); // extra challenges earned via ads
   const [adPromptFor, setAdPromptFor] = useState(null); // opponent awaiting ad watch
@@ -2711,7 +2913,12 @@ export default function App() {
   const SEASON_BASE = 0; // everyone starts the season from zero
   const gamePts = Object.values(playedGames).reduce((a, r) => a + r.pts, 0);
   const totalPts = gamePts + bonusPts;
-  const seasonPts = SEASON_BASE + totalPts + challengeDelta;
+  // + incomingDelta (≤0) so a re-save preserves points other players took from us.
+  // Floored at 0: Season Points are never negative, and the server never lets a
+  // defender drop below 0 (it clamps each transfer to the defender's balance), so
+  // the floor can only guard a transient client under-shoot — it never re-creates
+  // points the server actually refused to take.
+  const seasonPts = Math.max(0, SEASON_BASE + totalPts + challengeDelta + incomingDelta);
   const balance = seasonPts; // same number everywhere
 
   // Season key the backend stores scores under, e.g. "2026-07". Matches the
@@ -2724,6 +2931,13 @@ export default function App() {
   // locked run. Derived from `now` so it rolls over at local midnight.
   const dayNow = new Date(now);
   const dayKey = `${dayNow.getFullYear()}-${pad(dayNow.getMonth() + 1)}-${pad(dayNow.getDate())}`;
+  // Local-calendar day key for an arbitrary timestamp (a notification's created_at).
+  // Used to scope incoming-duel losses to TODAY: Season Points reset daily (they do
+  // not accumulate across days), so only same-day losses feed today's total.
+  const localDayKey = (ts) => {
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
 
   // ---- Boot: session → profile → leaderboard (runs once) -------------------
   useEffect(() => {
@@ -2753,7 +2967,19 @@ export default function App() {
           if (typeof run.bonusPts === "number") setBonusPts(run.bonusPts);
           if (typeof run.rewardClaimed === "boolean") setRewardClaimed(run.rewardClaimed);
           if (typeof run.challengeDelta === "number") setChallengeDelta(run.challengeDelta);
+          // Instant bridge: the last-known incoming net delta (losses − gains), so
+          // seasonPts is already adjusted the moment the save gate opens, even
+          // before the authoritative reconcile below returns.
+          if (typeof run.incomingDelta === "number") setIncomingDelta(run.incomingDelta);
         }
+        // Authoritative reconcile BEFORE `hydrated` flips: fold in every incoming
+        // duel that touched our points today (losses AND passive-defence gains),
+        // including any that landed while we were away. Only overwrites when we got
+        // a real answer (null = fetch failed → keep the bridged value rather than
+        // clobber a real transfer). This closes the boot window where the first
+        // saveScore could otherwise re-write the pre-transfer total and revert it.
+        const bootNet = await sumIncomingNetForDay(key);
+        if (alive && bootNet !== null) setIncomingDelta(bootNet);
       }
       const rows = await fetchLeaderboard(seasonKey);
       if (alive && rows.length) setBoard(rows);
@@ -2791,12 +3017,12 @@ export default function App() {
   useEffect(() => {
     if (!hasSupabase || !onboarded || !hydrated) return;
     clearTimeout(runSaveTimer.current);
-    const run = { played: playedGames, bonusPts, rewardClaimed, challengeDelta };
+    const run = { played: playedGames, bonusPts, rewardClaimed, challengeDelta, incomingDelta };
     const key = dayKey;
     runSaveTimer.current = setTimeout(() => { saveDailyRun(key, run); }, 1200);
     return () => clearTimeout(runSaveTimer.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playedGames, bonusPts, rewardClaimed, challengeDelta, onboarded, hydrated]);
+  }, [playedGames, bonusPts, rewardClaimed, challengeDelta, incomingDelta, onboarded, hydrated]);
 
   const showToast = (msg) => {
     setToast(msg);
@@ -2812,7 +3038,120 @@ export default function App() {
     if (rows.length) setBoard(rows);
     setRefreshingBoard(false);
     showToast(rows.length ? "Rankings updated" : "Couldn't reach the leaderboard");
+    loadDuelable();
+    reconcileIncoming();
   };
+
+  // Who can I duel today, and on which games? The server's duelable_targets RPC is
+  // per-game, so we fan out one call per game and merge into a by-nickname map the
+  // leaderboard / picker / stake sheet all read. This is the ONLY source of truth
+  // for eligibility — a name absent here is non-selectable (hasn't played, out of
+  // band, shielded, in grace, or on the per-pair 24h cooldown). No-op offline.
+  const loadDuelable = async () => {
+    if (!hasSupabase) return;
+    setDuelableLoading(true);
+    try {
+      const results = await Promise.all(GAMES.map((g) => getDuelableTargets(g.id, dayKey, seasonKey)));
+      const map = {};
+      GAMES.forEach((g, i) => {
+        for (const t of results[i] || []) {
+          if (!t || !t.name) continue;
+          if (!map[t.name]) map[t.name] = { defenderId: t.defenderId, name: t.name, avatar: t.avatar, pts: t.pts, games: {} };
+          map[t.name].games[g.id] = { snapshotPts: t.snapshotPts, snapshotLabel: t.snapshotLabel };
+        }
+      });
+      setDuelableByName(map);
+    } catch (e) {
+      // Never let a duelability refresh break the app — keep whatever we had.
+    } finally {
+      setDuelableLoading(false);
+    }
+  };
+
+  // Surface "someone beat you in a duel" news for the unread badge/banner. This is
+  // the DISPLAY path and is independent of the point reconciliation below: the
+  // banner drives the read/unread flag, reconcileIncoming drives the score. Keeping
+  // them separate is deliberate — marking a notification read must NOT change how
+  // many points it accounts for, and folding a loss into the score must NOT clear
+  // the badge. (getNotifications returns null on failure → treat as "no news".)
+  const loadNotifs = async () => {
+    if (!hasSupabase) return;
+    try {
+      const rows = await getNotifications({ unreadOnly: true, limit: 20 });
+      const news = (rows || []).filter((r) => r.type === "duel_lost" || r.type === "duel_defended");
+      if (news.length) setDuelNotifs(news);
+    } catch (e) {
+      /* ignore — notifications are non-critical */
+    }
+  };
+
+  // NET Season-Points change from duels OTHER players settled against us TODAY,
+  // read from our own notifications (the only record the client can see of a duel
+  // that touched our points while we were passive). Signed:
+  //   'duel_lost'     → an attacker BEAT our recorded score and took points → −
+  //   'duel_defended' → an attacker CHALLENGED and LOST; we passively won the
+  //                     forfeited stake → +
+  // Returns the signed net, or NULL when the fetch failed — callers must treat null
+  // as "unknown" and NOT zero the delta, or a transient outage would clobber a real
+  // persisted transfer. Idempotent: a pure sum over today's notifications, so
+  // running it any number of times yields the same value — there is no
+  // per-notification "applied" bookkeeping to get wrong, and double-application is
+  // structurally impossible in EITHER direction.
+  const sumIncomingNetForDay = async (dayK) => {
+    const rows = await getNotifications({ limit: 100 });
+    if (!Array.isArray(rows)) return null; // null = fetch failed → "unknown"
+    let net = 0;
+    for (const n of rows) {
+      if (!n) continue;
+      if (localDayKey(n.created_at) !== dayK) continue; // only today feeds today
+      const pts = Math.max(0, Number(n.payload?.points) || 0);
+      if (n.type === "duel_lost") net -= pts;
+      else if (n.type === "duel_defended") net += pts;
+    }
+    return net;
+  };
+
+  // Refresh the incoming net delta from the server's authoritative record. Safe to
+  // call on any cadence (boot, board refresh, focus, interval); each call fully
+  // recomputes incomingDelta, so it self-heals and never double-counts in either
+  // direction. No-op when the fetch failed (keeps whatever we had rather than
+  // reverting a real transfer).
+  const reconcileIncoming = async () => {
+    if (!hasSupabase) return;
+    const net = await sumIncomingNetForDay(dayKey);
+    if (net !== null) setIncomingDelta(net);
+  };
+
+  // Load duelability + notifications once boot has restored today's run. Re-runs if
+  // the day rolls over (a fresh dayKey means a fresh eligible set).
+  useEffect(() => {
+    if (!hasSupabase || !onboarded || !hydrated) return;
+    loadDuelable();
+    loadNotifs();
+    reconcileIncoming();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, onboarded, dayKey]);
+
+  // Keep the incoming-loss delta fresh WITHIN a session. Incoming duels are async
+  // and non-consensual — an attacker can settle against us at any time — so we poll
+  // the authoritative record on a light interval and whenever the tab regains
+  // focus. This shrinks (does not fully eliminate) the window in which a re-save
+  // could momentarily reflect a not-yet-seen loss; the deterministic close is on
+  // boot. reconcileIncoming is idempotent, so calling it here is always safe.
+  useEffect(() => {
+    if (!hasSupabase || !onboarded || !hydrated) return;
+    const tick = () => reconcileIncoming();
+    const iv = setInterval(tick, 30000);
+    const onVis = () => { if (document.visibilityState === "visible") tick(); };
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("focus", tick);
+    return () => {
+      clearInterval(iv);
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("focus", tick);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, onboarded, dayKey]);
 
   // GDPR erasure. Deletes the auth user (CASCADEs to profile + scores) and signs
   // the local session out. All app state is in-memory, so the honest "clean
@@ -2846,6 +3185,12 @@ export default function App() {
       const delta = Math.max(-15, Math.min(28, Math.round((pts - 480) / 22)));
       const firstOfDay = Object.keys(playedGames).length === 0;
       setPlayedGames((p) => ({ ...p, [activeGame]: { raw, pts, label } }));
+      // Append to the cross-player index so this player is now DUELABLE on this
+      // game today (a challenger's snapshot reads the latest same-day row here).
+      // Fire-and-forget: the data layer no-ops offline / not signed in and never
+      // throws, so this cannot break the run. Duel settlement recomputes points
+      // server-side, so the client-side `pts` sent here is display-only.
+      recordGameScore(activeGame, dayKey, raw, pts, label);
       setCoins((c) => c + Math.round(pts / 10)); // earn coins from performance
       setElo((e) => e + delta);
       if (firstOfDay) setStreak((s) => s + 1);
@@ -2885,17 +3230,45 @@ export default function App() {
     setReveal(null);
   };
 
-  const duelDone = (won) => {
+  // Called with the DuelScreen's outcome object:
+  //   server:  { won, transferred, partial, stake }
+  //   offline: { won, transferred: stake, offline: true }
+  //   error:   { error: true, message }
+  // Points are NEVER recomputed here — we reflect the server's `transferred` into
+  // OUR OWN challengeDelta only (+transferred on a win, −transferred on a loss).
+  // Because the challenger's next debounced saveScore writes base+games+delta, and
+  // the server moved the same `transferred`, the two stay consistent. On an error
+  // nothing moves and no win/loss is recorded.
+  const duelDone = (res) => {
+    const finish = () => { setDuelOpp(null); setDuelTarget(null); setDuelStake(0); if (hasSupabase) loadDuelable(); };
+    if (res && res.error) {
+      showToast(res.message || "Duel couldn't be settled — no points changed");
+      finish();
+      return;
+    }
+    const won = !!(res && res.won);
+    const moved = Number(res && res.transferred) || 0;
+    const partial = !!(res && res.partial);
     setDuelRecord((r) => ({ w: r.w + (won ? 1 : 0), l: r.l + (won ? 0 : 1) }));
     if (duelStake > 0) {
-      setChallengeDelta((d) => d + (won ? duelStake : -duelStake));
-      showToast(won ? `Win! +${duelStake} pts stolen` : `Loss! −${duelStake} pts`);
+      setChallengeDelta((d) => d + (won ? moved : -moved));
+      if (won) showToast(moved === 0 ? "Win! (shielded — no points to take)" : `Win! +${moved} pts${partial ? " (partial)" : ""}`);
+      else showToast(moved === 0 ? "Loss (no points to lose)" : `Loss! −${moved} pts`);
     } else {
       if (won) setDuelXP((x) => x + 40);
       showToast(won ? "Win! +40 pts" : "Loss — ask for a rematch!");
     }
-    setDuelOpp(null);
-    setDuelStake(0);
+    finish();
+  };
+
+  // Settle the active duel server-side. Sends ONLY the raw performance + context;
+  // the Edge Function recomputes the score, decides the winner, enforces
+  // shield/floor/cooldown/band, and moves points atomically. Returns the verdict
+  // (or { ok:false, error }). Null when there is no server target (offline path,
+  // where DuelScreen uses its local fallback instead).
+  const settleActiveDuel = async ({ raw }) => {
+    if (!hasSupabase || !duelTarget) return null;
+    return settleDuel({ defenderId: duelTarget.defenderId, gameId: duelGame, day: dayKey, season: seasonKey, stake: duelStake, raw });
   };
 
   // Rank across the season leaderboard (for the story card)
@@ -2947,13 +3320,54 @@ export default function App() {
       setAdPromptFor(opp); return;                                    // out of tries → offer ad
     }
     if (onCooldown) { showToast(`⏳ Cooldown — wait ${cooldownLeft}s`); return; }
+    // Server path: only players present in the duelable set can be challenged, and
+    // only on the games they actually played today. Default the game picker to the
+    // first game they're duelable on.
+    if (hasSupabase) {
+      const info = duelableByName[opp.name];
+      if (!info || !Object.keys(info.games).length) {
+        showToast("That player isn't duelable right now — check back after they play");
+        return;
+      }
+      setPickGame(Object.keys(info.games)[0]);
+    } else {
+      setPickGame("draw"); // offline fallback picks a real game id (was a dead "reaction")
+    }
     setStakeFor(opp);
   };
-  const confirmStake = (opp, amount, gameId) => {
-    setDuelGame(gameId || "reaction");
+
+  // Server pre-flight + launch. startDuel re-checks eligibility right before the VS
+  // screen (a target who got shielded / played again / went on cooldown since the
+  // list loaded is caught here) and locks in the fresh snapshot the UI shows.
+  const confirmStake = async (opp, amount, gameId) => {
     setStakeFor(null);
+    if (!hasSupabase) {
+      // Offline fallback: old fake path, no server target.
+      setDuelGame(gameId || "draw");
+      setDuelStake(amount);
+      setDuelTarget(null);
+      setDuelOpp(opp);
+      setChallengesUsed((n) => n + 1);
+      setLastChallenge(Date.now());
+      return;
+    }
+    const info = duelableByName[opp.name];
+    if (!info || !info.games[gameId]) {
+      showToast("That player isn't duelable on that game anymore");
+      loadDuelable();
+      return;
+    }
+    const pre = await startDuel(info.defenderId, gameId, dayKey, seasonKey);
+    if (!pre.ok) {
+      showToast(duelErrText(pre.error));
+      loadDuelable();
+      return;
+    }
+    const fresh = pre.target;
+    setDuelGame(gameId);
     setDuelStake(amount);
-    setDuelOpp(opp);
+    setDuelTarget({ defenderId: fresh.defenderId, name: fresh.name, avatar: fresh.avatar, snapshotPts: fresh.snapshotPts, snapshotLabel: fresh.snapshotLabel });
+    setDuelOpp({ name: fresh.name, avatar: fresh.avatar, pts: fresh.pts });
     setChallengesUsed((n) => n + 1);
     setLastChallenge(Date.now());
   };
@@ -2978,7 +3392,17 @@ export default function App() {
       setAdPlaying(false);
       setAdDuels((n) => n + 1);
       showToast("+1 challenge unlocked!");
-      if (opp) { setLastChallenge(0); setStakeFor(opp); } // bypass cooldown for the earned try
+      if (opp) {
+        setLastChallenge(0); // bypass cooldown for the earned try
+        if (hasSupabase) {
+          const info = duelableByName[opp.name];
+          if (!info || !Object.keys(info.games).length) { showToast("That player isn't duelable right now"); return; }
+          setPickGame(Object.keys(info.games)[0]);
+        } else {
+          setPickGame("draw");
+        }
+        setStakeFor(opp);
+      }
     }, 2600);
   };
 
@@ -3161,7 +3585,8 @@ export default function App() {
                 fontWeight: 800, fontFamily: T.font, cursor: "pointer", padding: "7px 13px", margin: "0 0 14px" }}>
               ‹ Cancel
             </button>
-            <DuelScreen opponent={duelOpp} onDone={duelDone} avatar={avatar} username={username} stake={duelStake} gameId={duelGame} />
+            <DuelScreen opponent={duelOpp} onDone={duelDone} avatar={avatar} username={username} stake={duelStake} gameId={duelGame}
+              onSettle={hasSupabase && duelTarget ? settleActiveDuel : null} target={duelTarget} />
           </>
         ) : activeGame ? (
           <>
@@ -3205,6 +3630,15 @@ export default function App() {
           </>
         ) : (
           <>
+            {hasSupabase && duelNotifs.length > 0 && (
+              <DuelNewsBanner
+                notifs={duelNotifs}
+                duelable={duelableByName}
+                onMarkRead={(ids) => markNotificationsRead(ids)}
+                onDismiss={() => setDuelNotifs([])}
+                onDuelBack={(target) => { setDuelNotifs([]); openStake(target); }}
+              />
+            )}
             {tab === "today" && (
               <TodayScreen playedGames={playedGames} streak={streak} totalPts={totalPts}
                 openGame={(id) => { setGameLive(false); setPracticeMode(false); setActiveGame(id); }}
@@ -3217,7 +3651,7 @@ export default function App() {
             )}
             {tab === "season" && <SeasonScreen seasonPts={seasonPts} username={username} avatar={avatar}
                 countdown={countdown} seasonName={SEASON_NAME} onRewards={() => setRewardsOpen(true)} board={board} />}
-            {tab === "leaderboard" && <LeaderboardScreen userEntry={userEntry} onChallenge={openStake} board={board} onRefresh={refreshBoard} refreshing={refreshingBoard} />}
+            {tab === "leaderboard" && <LeaderboardScreen userEntry={userEntry} onChallenge={openStake} board={board} onRefresh={refreshBoard} refreshing={refreshingBoard} duelable={duelableByName} hasBackend={hasSupabase} />}
             {tab === "shop" && <ShopScreen coins={coins} owned={owned} equipped={equipped}
               onBuy={buyCosmetic} onBuyCoins={buyCoins} onEquip={setEquipped} />}
             {tab === "profile" && (
@@ -3244,25 +3678,58 @@ export default function App() {
         </div>
       )}
 
-      {/* Matchmaking picker → routes to stake */}
-      {pickerOpen && (
+      {/* Matchmaking picker → routes to stake. Server path lists REAL duelable
+          targets (players who scored a game today and pass band/shield/grace/
+          cooldown); offline falls back to BOTS. */}
+      {pickerOpen && (() => {
+        const targets = hasSupabase ? Object.values(duelableByName) : null;
+        return (
         <Sheet onClose={() => setPickerOpen(false)}>
           <div style={{ fontSize: 20, fontWeight: 700, fontFamily: T.display, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}><Icon name="swords" size={20} color={T.red} />Pick opponent</div>
           <div style={{ color: T.sub, fontSize: 13, marginBottom: 16 }}>Ranked · bet points · winner takes the stake</div>
-          {BOTS.map((f) => (
-            <div key={f.name} className="pressable" onClick={() => { setPickerOpen(false); openStake(f); }}
-              style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 10px", borderRadius: 14, cursor: "pointer",
-                borderBottom: `2px solid ${INK}` }}>
-              <Avatar id={f.avatar} size={44} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 15, display: "flex", alignItems: "center", gap: 6 }}>{f.name} {f.friend && <Icon name="users" size={12} color={T.sub2} strokeWidth={2.1} />}</div>
-                <div style={{ color: T.sub, fontSize: 12 }}>~{f.skill} ms average · {f.pts} pts</div>
+          {hasSupabase ? (
+            duelableLoading && !targets.length ? (
+              <div style={{ textAlign: "center", color: T.sub, fontSize: 13, padding: "26px 0" }}>Finding opponents…</div>
+            ) : targets.length ? (
+              targets.map((f) => (
+                <div key={f.name} className="pressable" onClick={() => { setPickerOpen(false); openStake(f); }}
+                  style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 10px", borderRadius: 14, cursor: "pointer",
+                    borderBottom: `2px solid ${INK}` }}>
+                  <Avatar id={f.avatar} size={44} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15 }}>{f.name}</div>
+                    <div style={{ color: T.sub, fontSize: 12 }}>{f.pts} pts · duelable on {Object.keys(f.games).length} game{Object.keys(f.games).length === 1 ? "" : "s"} today</div>
+                  </div>
+                  <Pill color={T.red}>Bet</Pill>
+                </div>
+              ))
+            ) : (
+              <div style={{ ...sticker(T.card, T.shadowSm), borderRadius: 14, padding: "24px 18px", textAlign: "center",
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 26 }}>🕰️</span>
+                <div style={{ fontWeight: 800, fontSize: 15, color: T.text }}>No one to duel yet</div>
+                <div style={{ color: T.sub, fontSize: 12.5, lineHeight: 1.4, maxWidth: 250 }}>
+                  Players become duelable once they play a game today and land in your points range. Check back soon.
+                </div>
               </div>
-              <Pill color={T.red}>Bet</Pill>
-            </div>
-          ))}
+            )
+          ) : (
+            BOTS.map((f) => (
+              <div key={f.name} className="pressable" onClick={() => { setPickerOpen(false); openStake(f); }}
+                style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 10px", borderRadius: 14, cursor: "pointer",
+                  borderBottom: `2px solid ${INK}` }}>
+                <Avatar id={f.avatar} size={44} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, display: "flex", alignItems: "center", gap: 6 }}>{f.name} {f.friend && <Icon name="users" size={12} color={T.sub2} strokeWidth={2.1} />}</div>
+                  <div style={{ color: T.sub, fontSize: 12 }}>~{f.skill} ms average · {f.pts} pts</div>
+                </div>
+                <Pill color={T.red}>Bet</Pill>
+              </div>
+            ))
+          )}
         </Sheet>
-      )}
+        );
+      })()}
 
       {/* Stake selection sheet */}
       {stakeFor && (
@@ -3274,20 +3741,37 @@ export default function App() {
             vs <b style={{ color: T.text }}>{stakeFor.name}</b> · pick a game, then your bet. Win to steal it, lose and you pay.
           </div>
 
-          {/* Game picker */}
+          {/* Game picker — server path shows ONLY the games this defender actually
+              played today (the games we can settle against); offline shows all. */}
           <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, letterSpacing: 0.3, marginBottom: 10 }}>CHOOSE GAME</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 18 }}>
-            {GAMES.map((g) => (
-              <button key={g.id} className="pressable" onClick={() => setPickGame(g.id)}
-                style={{ boxSizing: "border-box", display: "flex", alignItems: "center", gap: 10, padding: "12px",
-                  borderRadius: 14, cursor: "pointer", textAlign: "left",
-                  border: `${T.bw} solid ${INK}`, boxShadow: pickGame === g.id ? T.shadowMd : T.shadowSm,
-                  background: pickGame === g.id ? g.bg : T.card }}>
-                <Icon name={g.icon} size={22} color={inkOn(g.color)} strokeWidth={2.2} />
-                <span style={{ fontSize: 13.5, fontWeight: 700 }}>{g.name}</span>
-              </button>
-            ))}
-          </div>
+          {(() => {
+            const info = hasSupabase ? duelableByName[stakeFor.name] : null;
+            const playable = hasSupabase ? GAMES.filter((g) => info && info.games[g.id]) : GAMES;
+            const snap = info && pickGame && info.games[pickGame];
+            return (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: snap ? 10 : 18 }}>
+                  {playable.map((g) => (
+                    <button key={g.id} className="pressable" onClick={() => setPickGame(g.id)}
+                      style={{ boxSizing: "border-box", display: "flex", alignItems: "center", gap: 10, padding: "12px",
+                        borderRadius: 14, cursor: "pointer", textAlign: "left",
+                        border: `${T.bw} solid ${INK}`, boxShadow: pickGame === g.id ? T.shadowMd : T.shadowSm,
+                        background: pickGame === g.id ? g.bg : T.card }}>
+                      <Icon name={g.icon} size={22} color={inkOn(g.color)} strokeWidth={2.2} />
+                      <span style={{ fontSize: 13.5, fontWeight: 700 }}>{g.name}</span>
+                    </button>
+                  ))}
+                </div>
+                {snap && (
+                  <div style={{ ...sticker(T.card, T.shadowSm), borderRadius: 10, padding: "9px 12px", marginBottom: 18,
+                    display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 700, color: T.text }}>
+                    <Icon name="target" size={14} color={T.red} />
+                    {stakeFor.name}'s score to beat: <span style={{ color: T.red }}>{snap.snapshotLabel}</span>
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           <div style={{ display: "flex", alignItems: "center", gap: 10, background: T.card, border: `${T.bw} solid ${INK}`,
             borderRadius: 16, padding: "12px 14px", marginBottom: 16 }}>
@@ -3300,19 +3784,23 @@ export default function App() {
           <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, letterSpacing: 0.3, marginBottom: 10 }}>YOUR STAKE</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
             {[50, 100, 200].map((amt) => {
-              const afford = balance >= amt;
+              // Can't stake until a game is chosen, and only points you have.
+              const ready = !!pickGame && balance >= amt;
               return (
-                <button key={amt} className="pressable" disabled={!afford}
-                  onClick={() => afford && confirmStake(stakeFor, amt, pickGame)}
-                  style={{ boxSizing: "border-box", padding: "16px 0", borderRadius: 12, cursor: afford ? "pointer" : "not-allowed",
-                    ...sticker(afford ? T.red : T.card2, afford ? T.shadowMd : "none"), fontFamily: T.display,
-                    color: afford ? "#fff" : T.sub2, opacity: afford ? 1 : 0.6 }}>
+                <button key={amt} className="pressable" disabled={!ready}
+                  onClick={() => ready && confirmStake(stakeFor, amt, pickGame)}
+                  style={{ boxSizing: "border-box", padding: "16px 0", borderRadius: 12, cursor: ready ? "pointer" : "not-allowed",
+                    ...sticker(ready ? T.red : T.card2, ready ? T.shadowMd : "none"), fontFamily: T.display,
+                    color: ready ? "#fff" : T.sub2, opacity: ready ? 1 : 0.6 }}>
                   <div style={{ fontSize: 22, fontWeight: 900 }}>{amt}</div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: afford ? "#FFDDD4" : T.sub2 }}>points</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: ready ? "#FFDDD4" : T.sub2 }}>points</div>
                 </button>
               );
             })}
           </div>
+          {!pickGame && (
+            <div style={{ textAlign: "center", color: T.sub2, fontSize: 12, marginBottom: 8 }}>Pick a game above to set your bet.</div>
+          )}
           <div style={{ display: "flex", alignItems: "center", gap: 8, color: T.sub2, fontSize: 12, justifyContent: "center" }}>
             <Icon name="shield" size={13} color={T.sub2} /> You can only stake points you have · 20s cooldown between challenges
           </div>

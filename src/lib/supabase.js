@@ -259,6 +259,210 @@ export async function fetchLeaderboard(season, limit = 100) {
   }
 }
 
+// ===========================================================================
+// DUELS (Phase: real duels v1) — see supabase/003_duels.sql + the settle-duel
+// Edge Function. Every function here keeps the module's contract: no throw, safe
+// empty/false result when there is no backend or the tables/function are not
+// deployed yet, so the app never crashes mid-build and the old fake-oppScore path
+// keeps working for testers until the UI pass wires these in.
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// Append the player's just-finished daily game score to the cross-player index
+// (game_scores). This is what makes a player DUELABLE on that game today: a
+// challenger's snapshot reads the latest same-day row here. Call it from the
+// daily-game finish handler, fire-and-forget. No-op offline / not signed in.
+//   day: "YYYY-MM-DD" (same local day as daySeed/dayKey)
+// ---------------------------------------------------------------------------
+export async function recordGameScore(gameId, day, raw, pts, label) {
+  if (!supabase) return { ok: false, error: "offline" };
+  try {
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth?.user?.id;
+    if (!uid) return { ok: false, error: "offline" };
+
+    const { error } = await supabase.from("game_scores").insert({
+      profile_id: uid,
+      game_id: gameId,
+      day,
+      raw: Number(raw) || 0,
+      pts: Math.round(pts) || 0,
+      label: label ? String(label) : "",
+    });
+    if (error) {
+      // Table may not exist yet (migration not run) — degrade quietly.
+      console.warn("[supabase] recordGameScore error:", error.message);
+      return { ok: false, error: "unknown", message: error.message };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "unknown", message: e?.message || String(e) };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Who can this challenger duel on `gameId` today? Goes through the
+// duelable_targets SECURITY DEFINER RPC (the ONLY cross-player read path). Returns
+// an array of eligible targets already filtered by band / grace / shield /
+// per-pair-cooldown / has-a-same-day-score, in a shape the leaderboard/duel UI can
+// use directly. Empty array on any failure so callers fall back to the local path.
+//   Each row: { defenderId, name, avatar, pts, snapshotPts, snapshotLabel }
+// ---------------------------------------------------------------------------
+export async function getDuelableTargets(gameId, day, season, limit = 40) {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase.rpc("duelable_targets", {
+      p_game: gameId,
+      p_day: day,
+      p_season: season,
+      p_limit: limit,
+    });
+    if (error) {
+      console.warn("[supabase] getDuelableTargets error:", error.message);
+      return [];
+    }
+    return (data || []).map((r) => ({
+      defenderId: r.defender_id,
+      name: r.name,
+      avatar: r.avatar,
+      pts: r.pts,
+      snapshotPts: r.snapshot_pts,
+      snapshotLabel: r.snapshot_label,
+    }));
+  } catch (e) {
+    console.warn("[supabase] getDuelableTargets error:", e?.message || e);
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pre-flight before the VS screen. In the async, non-consensual model there is NO
+// server "pending duel" row — the authoritative write happens at settleDuel. This
+// re-checks (right before play) that the chosen target is STILL duelable and locks
+// in the snapshot the UI shows, so a target who got shielded/played-again between
+// leaderboard load and challenge is caught early. Returns:
+//   { ok: true, target }                  → still eligible, includes fresh snapshot
+//   { ok: false, error: "unavailable" }   → no longer duelable (grey it out)
+//   { ok: false, error: "offline" }       → no backend (UI keeps the local path)
+// ---------------------------------------------------------------------------
+export async function startDuel(defenderId, gameId, day, season) {
+  if (!supabase) return { ok: false, error: "offline" };
+  try {
+    const targets = await getDuelableTargets(gameId, day, season, 100);
+    const target = targets.find((t) => t.defenderId === defenderId);
+    if (!target) return { ok: false, error: "unavailable" };
+    return { ok: true, target };
+  } catch (e) {
+    return { ok: false, error: "unknown", message: e?.message || String(e) };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Settle a duel server-side. Sends ONLY the raw performance + duel context to the
+// settle-duel Edge Function; the server recomputes the score, decides the winner,
+// enforces shield/floor/cooldown/band, and moves points atomically. NEVER sends a
+// points value or a win verdict. Returns the server's verdict object:
+//   { ok, won, server_pts, defender_pts, defender_label, stake, transferred,
+//     partial, outcome, duel_id }
+// or { ok:false, error } — including "rejected" for an implausible raw. On any
+// failure the caller can fall back to the existing local path so testing isn't
+// blocked before deploy.
+//   args: { defenderId, gameId, day, season, stake, raw, inputs? }
+// ---------------------------------------------------------------------------
+export async function settleDuel({ defenderId, gameId, day, season, stake, raw, inputs }) {
+  if (!supabase) return { ok: false, error: "offline" };
+  try {
+    const { data, error } = await supabase.functions.invoke("settle-duel", {
+      body: {
+        defenderId,
+        gameId,
+        day,
+        season,
+        stake,
+        raw,
+        inputs: inputs || {},
+      },
+    });
+    if (error) {
+      console.warn("[supabase] settleDuel error:", error.message);
+      return { ok: false, error: "unknown", message: error.message };
+    }
+    return data; // the Edge Function's JSON verdict (already { ok, ... })
+  } catch (e) {
+    console.warn("[supabase] settleDuel error:", e?.message || e);
+    return { ok: false, error: "unknown", message: e?.message || String(e) };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The player's own notifications, newest first (e.g. "someone dueled you and took
+// N points"). Own-rows-only via RLS. `unreadOnly` filters to notifications not yet
+// marked read.
+//
+// RETURN CONTRACT: an ARRAY on success (possibly empty when there are genuinely no
+// rows), or `null` on ANY failure (no backend / not signed in / query error). The
+// null-vs-[] distinction matters for the incoming-duel reconciliation: an EMPTY
+// result means "authoritatively zero losses" (safe to zero the local incoming
+// delta), whereas a FAILED fetch must NOT be read as zero or it would clobber a
+// real, persisted deduction and let the next saveScore revert it. Callers that
+// only render should treat null like []; callers that reconcile MUST branch on it.
+// ---------------------------------------------------------------------------
+export async function getNotifications({ unreadOnly = false, limit = 50 } = {}) {
+  if (!supabase) return null;
+  try {
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth?.user?.id;
+    if (!uid) return null;
+
+    let q = supabase
+      .from("notifications")
+      .select("id, type, payload, read_at, created_at")
+      .eq("profile_id", uid)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (unreadOnly) q = q.is("read_at", null);
+
+    const { data, error } = await q;
+    if (error) {
+      console.warn("[supabase] getNotifications error:", error.message);
+      return null;
+    }
+    return data || [];
+  } catch (e) {
+    console.warn("[supabase] getNotifications error:", e?.message || e);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Mark notifications read (own rows only). Pass an array of ids, or omit to mark
+// all of the player's unread notifications read. No-op offline. Never throws.
+// ---------------------------------------------------------------------------
+export async function markNotificationsRead(ids) {
+  if (!supabase) return { ok: false, error: "offline" };
+  try {
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth?.user?.id;
+    if (!uid) return { ok: false, error: "offline" };
+
+    let q = supabase
+      .from("notifications")
+      .update({ read_at: new Date().toISOString() })
+      .eq("profile_id", uid)
+      .is("read_at", null);
+    if (Array.isArray(ids) && ids.length) q = q.in("id", ids);
+
+    const { error } = await q;
+    if (error) {
+      console.warn("[supabase] markNotificationsRead error:", error.message);
+      return { ok: false, error: "unknown", message: error.message };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "unknown", message: e?.message || String(e) };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // GDPR erasure — deletes the player's auth user, which CASCADEs to their profile
 // and scores. Runs via a SECURITY DEFINER RPC (see schema.sql) because deleting

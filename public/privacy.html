@@ -150,21 +150,34 @@
   <p>The complete list of what your account holds is:</p>
   <div class="tablewrap">
   <table>
-    <tr><th>What</th><th>What it is</th></tr>
-    <tr><td>A random ID</td><td>A string of random characters (a UUID). It is not linked to your name, email or device identity. It is just a label so your data is yours.</td></tr>
-    <tr><td>Your nickname</td><td>The name you pick. <strong>This is public</strong> — it appears on the leaderboard for other players to see. Please do not use your real full name; a nickname is all you need.</td></tr>
-    <tr><td>Your avatar</td><td>Which of the built-in avatar pictures you chose.</td></tr>
-    <tr><td>Your Season Points</td><td>Your score for the current season, so you can climb the leaderboard.</td></tr>
+    <tr><th>What</th><th>What it is</th><th>Who can see it</th></tr>
+    <tr><td>A random ID</td><td>A string of random characters (a UUID). It is not linked to your name, email or device identity. It is just a label so your data is yours.</td><td>Only us (never shown to other players)</td></tr>
+    <tr><td>Your nickname</td><td>The name you pick. Please do not use your real full name; a nickname is all you need.</td><td><strong>Public</strong> — shown on the leaderboard and in duels</td></tr>
+    <tr><td>Your avatar</td><td>Which of the built-in avatar pictures you chose.</td><td><strong>Public</strong></td></tr>
+    <tr><td>Your Season Points</td><td>Your season score, so you can climb the leaderboard.</td><td><strong>Public</strong></td></tr>
+    <tr><td>Your per-game daily scores</td><td>How you did in each of the day's mini-games.</td><td><strong>Visible to a player who challenges you</strong>, so they can pick which game to duel you on. See section 2a.</td></tr>
+    <tr><td>Your duel history</td><td>The duels you take part in: who challenged whom, on which game, when, how many points were staked, who won, and how many points moved. See section 2a.</td><td><strong>Visible to the other player in that duel</strong></td></tr>
+    <tr><td>Your notifications</td><td>Messages the game creates for you — for example, telling you that another player won a duel against you and how many points they took.</td><td>Only you</td></tr>
   </table>
   </div>
-  <p>That is the whole footprint. There is no email, no password, no location, no contacts, no advertising ID, and no sensitive data of any kind.</p>
+  <p>That is the whole footprint. There is no email, no password, no location, no contacts, no advertising ID, and no sensitive data of any kind. The account is still anonymous — none of the new data is tied to a real-world identity, only to your random ID and the nickname you chose.</p>
+
+  <h3 id="duels">2a. Duels — what other players can see and do</h3>
+  <p>Skill Duels lets you challenge another player to a 1-versus-1 duel and play for Season Points. To make that work, some of your play data is shared with the other player, and the outcome can change your score. In plain terms:</p>
+  <ul>
+    <li><strong>Your daily per-game scores become visible to a challenger.</strong> When someone considers duelling you, they can see how you scored on each of the day's games, so they can choose which one to challenge you on. Previously only your nickname, avatar and total Season Points were visible to others; with duels, your individual game scores are too.</li>
+    <li><strong>Duels are recorded and shown to both sides.</strong> Each duel is stored against both players' accounts and both of you can see it: the game played, the stake, the result, and the points that moved. If you lose, you get a notification naming the player who beat you.</li>
+    <li><strong>Another player can take your Season Points.</strong> If someone duels you and wins, Season Points move from you to them — this can happen as a result of their action, and Season Points are the score that sets your ranking. A <strong>shield</strong> limits how many points you can lose to duels in a single day, so you can never be wiped out in one sitting.</li>
+  </ul>
+  <p>Season Points are only a game score. They are not money and have no cash value (see the Terms of Service), so nothing of real-world value changes hands when points move in a duel.</p>
 
   <h3>A note about storage on your device</h3>
   <p>To keep you signed in to that same account between visits, the app stores a login token in your browser's local storage. This is strictly necessary to make the account work — without it, every visit would be a brand-new stranger. We do not use any cookies or storage for advertising or analytics.</p>
 
   <h3>Why we hold this and the legal basis</h3>
-  <p>We process your account data to do one thing: <strong>run the game for you</strong> — remember who you are, save your score, and show the leaderboard you are playing to reach. Under the GDPR our lawful basis is <strong>Article 6(1)(b), performance of a contract</strong>: providing the game you asked to use. Your nickname being visible to other players is not a separate choice — it is built into the leaderboard feature you chose to take part in.</p>
-  <p>We do not use your data for profiling, advertising or any automated decision that affects you. There is still no analytics, no tracking pixel and no advertising SDK in the app.</p>
+  <p>We process your account and play data to do one thing: <strong>run the game for you</strong> — remember who you are, save your scores, run duels, and show the leaderboard and competition you are playing to take part in. Under the GDPR our lawful basis is <strong>Article 6(1)(b), performance of a contract</strong>: providing the game you asked to use. Duels are part of that game. When you play Skill Duels you are choosing to take part in a competitive game where scores are compared and players challenge each other — sharing your scores with a challenger, and points moving between players when a duel is won or lost, are built into that feature, not separate uses of your data.</p>
+  <p>To the limited extent that another player's win affects <em>your</em> score, we also rely on our and other players' <strong>legitimate interest</strong> (Article 6(1)(f)) in running a fair competitive game with the anti-loss <strong>shield</strong> as a safeguard. If you would rather your scores were never visible to a challenger and your points never at stake, the way to opt out is simple: do not start or accept duels — the rest of the game works without them.</p>
+  <p>We do not use your data for profiling, advertising or any automated decision that produces a legal or similarly significant effect on you. There is still no analytics, no tracking pixel and no advertising SDK in the app.</p>
 
   <h3>The share button</h3>
   <p>If you tap "copy", we put a short summary of your run on your device's clipboard. That happens entirely on your device. We do not see it and nothing is sent to us. What you do with the copied text afterwards — pasting it into another app — is covered by that app's own privacy policy, not ours.</p>
@@ -172,7 +185,7 @@
   <h2>3. Where your data lives, and who processes it</h2>
   <p>We do not run our own servers. Two service providers act as our processors under GDPR Article 28, handling data only on our instructions:</p>
   <ul>
-    <li><strong>Supabase</strong> — stores your account (the ID, nickname, avatar and Season Points above) and runs the sign-in. Our Supabase project is hosted in the <strong>European Union (Frankfurt, Germany)</strong>, so this data stays in the EU. We rely on Supabase's standard Data Processing Addendum (<a href="https://supabase.com/legal/dpa">supabase.com/legal/dpa</a>).</li>
+    <li><strong>Supabase</strong> — stores your account and play data (the ID, nickname, avatar, Season Points, per-game scores, duel history and notifications above) and runs the sign-in. Our Supabase project is hosted in the <strong>European Union (Frankfurt, Germany)</strong>, so this data stays in the EU. We rely on Supabase's standard Data Processing Addendum (<a href="https://supabase.com/legal/dpa">supabase.com/legal/dpa</a>).</li>
     <li><strong>Vercel Inc.</strong> — serves the game's files (the page, fonts and images). Like every web server, it automatically writes a short technical log when your device requests a page: your IP address, the time, the file requested and your browser's user-agent string. Where data reaches the United States, the transfer relies on the EU Standard Contractual Clauses and the EU–US Data Privacy Framework.</li>
   </ul>
   <p>We do not sell your data, we do not share it with advertisers, and no one else receives it.</p>
@@ -186,6 +199,12 @@
       <td>Running the game and the leaderboard for you</td>
       <td>Contract, GDPR Art. 6(1)(b)</td>
       <td>Until you delete your account (see section 6). We hold it for as long as you use the game.</td>
+    </tr>
+    <tr>
+      <td>Per-game scores, duel history and notifications</td>
+      <td>Running duels and the competition; showing both players their duel results</td>
+      <td>Contract, Art. 6(1)(b); and legitimate interests, Art. 6(1)(f), for the fair-competition part (see section 2)</td>
+      <td>Kept while your account is active, so duel results and history stay meaningful. Deleted when you delete your account (see section 6).</td>
     </tr>
     <tr>
       <td>Server access logs (IP, timestamp, requested file, user-agent)</td>
@@ -221,7 +240,7 @@
     <li>give you a copy in a portable format;</li>
     <li>where we ever rely on consent, withdraw that consent at any time.</li>
   </ul>
-  <p><strong>Deleting your account really deletes it.</strong> When your account is deleted, we remove your random ID from the sign-in system, and your nickname, avatar and Season Points are deleted along with it automatically. Nothing about you is kept, and your nickname leaves the leaderboard. This is a true erasure, not a hidden "disabled" flag.</p>
+  <p><strong>Deleting your account really deletes it.</strong> When your account is deleted, we remove your random ID from the sign-in system, and everything tied to it — your nickname, avatar, Season Points, per-game scores, duel history and notifications — is deleted along with it automatically. Nothing about you is kept, and your nickname leaves the leaderboard. This is a true erasure, not a hidden "disabled" flag. One thing to understand about duels: a duel involves two people, so the fact that a past duel happened may still appear in the <em>other</em> player's history. It is designed so that once your account is gone, that record no longer identifies you.</p>
   <p>You can delete your own account at any time from <strong>Settings → Delete my account</strong> (there is a two-step confirmation, and it erases your profile and scores straight away). To delete your account any other way, or to exercise any other right, email shinicode.dev@gmail.com and we will action it. We answer within one month.</p>
   <p>One honest limitation: because we deliberately do not know your name or email, we may not be able to connect a request to a specific account unless you are contacting us from within the app or can identify your account to us. If we genuinely cannot tell which data is yours, we will tell you rather than guess (GDPR Art. 11).</p>
 
@@ -236,7 +255,7 @@
   </div>
 
   <h2>7. Security</h2>
-  <p>The site is served over HTTPS and your data sits in a managed EU database (Supabase) protected by row-level security rules, meaning each account can only reach its own data. The best protection, though, is how little there is: no email, no password and no real identity to steal. Your nickname is public by design; treat it as public.</p>
+  <p>The site is served over HTTPS and your data sits in a managed EU database (Supabase) protected by row-level security rules, so each account can only reach the data it is allowed to — its own data, plus the specific duel and leaderboard information that is meant to be shared. The best protection, though, is how little there is: no email, no password and no real identity to steal. Your nickname, avatar, scores and duel results are public or shared by design; treat them as visible to other players.</p>
 
   <h2>8. Changes to this policy</h2>
   <p>This policy describes Skill Duels during closed testing. If we add optional email sign-in for account recovery, real-money purchases, ads, or anything that collects more than the small list above, this policy will change and the "last updated" date at the top will change with it. Material changes will be announced inside the app before they take effect. Please check back after any big update.</p>
