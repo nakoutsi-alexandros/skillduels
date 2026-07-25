@@ -240,6 +240,14 @@ $$;
 create or replace function public.duel_shield_cap()
 returns integer language sql immutable as $$ select 300; $$;
 
+-- New-player grace: a player can't be dueled until this long after signup, so
+-- brand-new accounts can't be farmed instantly. LOWERED to 2 minutes for CLOSED
+-- TESTING — every tester is a fresh account, and the original 48h blocked all
+-- duels for the whole test. RAISE this back to interval '24 hours' (or '48 hours')
+-- before any public launch. Referenced by both duelable_targets and settle_duel.
+create or replace function public.duel_grace()
+returns interval language sql immutable as $$ select interval '2 minutes'; $$;
+
 
 -- ----------------------------------------------------------------------------
 -- 7. duelable_targets — who can this challenger duel on game X today?
@@ -310,7 +318,7 @@ begin
   where p.id <> v_challenger
     and coalesce(s.season_pts, 0) between v_lo and v_hi
     and coalesce(s.season_pts, 0) > 0
-    and now() >= p.created_at + interval '48 hours'
+    and now() >= p.created_at + public.duel_grace()
     and exists (select 1 from public.daily_runs dr where dr.profile_id = p.id)
     and (
       public.duel_shield_cap() - coalesce((
@@ -424,7 +432,7 @@ begin
   -- has elapsed AND they have at least one recorded run.
   select created_at into v_def_created from public.profiles where id = p_defender;
   select exists(select 1 from public.daily_runs where profile_id = p_defender) into v_has_run;
-  if v_now < v_def_created + interval '48 hours' or not v_has_run then
+  if v_now < v_def_created + public.duel_grace() or not v_has_run then
     return jsonb_build_object('ok', false, 'error', 'graced');
   end if;
 
