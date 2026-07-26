@@ -274,13 +274,18 @@ export async function fetchLeaderboard(season, limit = 100) {
 // daily-game finish handler, fire-and-forget. No-op offline / not signed in.
 //   day: "YYYY-MM-DD" (same local day as daySeed/dayKey)
 // ---------------------------------------------------------------------------
-export async function recordGameScore(gameId, day, raw, pts, label) {
+export async function recordGameScore(gameId, day, raw, pts, label, secondary) {
   if (!supabase) return { ok: false, error: "offline" };
   try {
     const { data: auth } = await supabase.auth.getUser();
     const uid = auth?.user?.id;
     if (!uid) return { ok: false, error: "offline" };
 
+    // `secondary` is the finer tiebreak metric for this game (see 003_duels.sql
+    // §6b). It is the DEFENDER's snapshot value a later duel breaks a points-tie
+    // against, so it must be persisted alongside raw/pts. Nullable: send null when
+    // the attempt produced no finer signal (e.g. 0 correct in a timed game).
+    const secNum = Number(secondary);
     const { error } = await supabase.from("game_scores").insert({
       profile_id: uid,
       game_id: gameId,
@@ -288,6 +293,7 @@ export async function recordGameScore(gameId, day, raw, pts, label) {
       raw: Number(raw) || 0,
       pts: Math.round(pts) || 0,
       label: label ? String(label) : "",
+      secondary: Number.isFinite(secNum) ? secNum : null,
     });
     if (error) {
       // Table may not exist yet (migration not run) — degrade quietly.
@@ -367,11 +373,22 @@ export async function startDuel(defenderId, gameId, day, season) {
 // or { ok:false, error } — including "rejected" for an implausible raw. On any
 // failure the caller can fall back to the existing local path so testing isn't
 // blocked before deploy.
-//   args: { defenderId, gameId, day, season, stake, raw, inputs? }
+//   args: { defenderId, gameId, day, season, stake, raw, secondary?, inputs? }
+//
+// TIEBREAKER: the challenger's `secondary` (the finer, same-skill metric) is folded
+// into `inputs.secondary` on purpose. The settle-duel Edge Function already forwards
+// `inputs` verbatim into the SQL settle_duel's challenger_inputs, where it is bounded
+// and used to break a points tie — so the tiebreaker needs NO Edge Function change or
+// redeploy. Only the SQL (003_duels.sql) has to be re-run.
 // ---------------------------------------------------------------------------
-export async function settleDuel({ defenderId, gameId, day, season, stake, raw, inputs }) {
+export async function settleDuel({ defenderId, gameId, day, season, stake, raw, secondary, inputs }) {
   if (!supabase) return { ok: false, error: "offline" };
   try {
+    const secNum = Number(secondary);
+    const mergedInputs = {
+      ...(inputs || {}),
+      ...(Number.isFinite(secNum) ? { secondary: secNum } : {}),
+    };
     const { data, error } = await supabase.functions.invoke("settle-duel", {
       body: {
         defenderId,
@@ -380,7 +397,7 @@ export async function settleDuel({ defenderId, gameId, day, season, stake, raw, 
         season,
         stake,
         raw,
-        inputs: inputs || {},
+        inputs: mergedInputs,
       },
     });
     if (error) {

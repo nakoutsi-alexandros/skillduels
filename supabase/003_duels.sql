@@ -77,8 +77,16 @@ create table if not exists public.game_scores (
   raw        numeric not null,                    -- the game's RAW result (ms, %, count, seconds…)
   pts        integer not null,                    -- points as the CLIENT computed them (display only)
   label      text not null default '',            -- human label, e.g. "212 ms avg"
+  secondary  numeric,                             -- TIEBREAK metric: a FINER measure of the same skill
+                                                  -- than pts (see §6 duel_bound_secondary). Nullable:
+                                                  -- legacy rows + games/attempts with no finer signal.
   created_at timestamptz not null default now()
 );
+
+-- Idempotent add for DATABASES CREATED BEFORE the tiebreaker pass: `create table
+-- if not exists` above is a no-op on an existing table, so the new column must be
+-- added explicitly. Safe to re-run.
+alter table public.game_scores add column if not exists secondary numeric;
 
 -- "Latest same-day score for game X by player Y" — the exact shape a duel reads.
 create index if not exists game_scores_lookup_idx
@@ -250,6 +258,67 @@ returns interval language sql immutable as $$ select interval '2 minutes'; $$;
 
 
 -- ----------------------------------------------------------------------------
+-- 6b. TIEBREAKER — the secondary metric: bounding + direction
+-- ----------------------------------------------------------------------------
+-- When a challenger's server-recomputed points EQUAL the defender's snapshot
+-- points, the duel is decided by a SECONDARY metric: a FINER measure of the SAME
+-- skill than the (rounded/coarse) points. Per game (mirrored from src/App.jsx):
+--
+--   game       secondary means                          BETTER =   why it's finer
+--   ---------- ---------------------------------------- ---------- --------------------------------
+--   draw       unrounded avg reaction ms                LOWER      pts round avg ms → equal pts can
+--                                                                   hide a faster true average
+--   bullseye   unrounded avg accuracy (0..100)          HIGHER     pts round the % → finer accuracy
+--   numbers    full-precision completion seconds        LOWER      pts derive from 0.1s-rounded time
+--   oddone     ms elapsed to reach the final count      LOWER      same count found faster = better
+--   chimp      avg ms per correct recall tap            LOWER      same length recalled faster
+--   quickmath  ms elapsed to the last correct answer    LOWER      same count answered faster
+--
+-- ANTI-CHEAT: the client sends its secondary inside challenger_inputs.secondary
+-- (it rides the EXISTING settle-duel payload — no Edge Function change). We do NOT
+-- trust it: duel_bound_secondary rejects out-of-band values, and for the three
+-- games whose secondary is just the UNROUNDED version of raw it also cross-checks
+-- that the secondary is consistent with the (already-bounded) raw. Returns NULL
+-- for any implausible / inconsistent / absent value. What we still CANNOT prove
+-- (same limit as raw): that a plausible, self-consistent secondary was genuinely
+-- achieved — there is no input-trace replay yet. So: absurd secondaries are
+-- rejected; a plausible lie is bounded, not eliminated (honest, matches raw).
+create or replace function public.duel_bound_secondary(p_game text, p_raw numeric, p_sec numeric)
+returns numeric language sql immutable as $$
+  select case
+    when p_sec is null then null
+    -- UNROUNDED-OF-RAW games: must be in band AND round back to the same raw.
+    when p_game = 'draw'     and p_sec >= 90 and p_sec <= 5000
+                             and abs(round(p_sec) - round(p_raw)) <= 1            then p_sec
+    when p_game = 'bullseye' and p_sec >= 0  and p_sec <= 100
+                             and abs(round(p_sec) - round(p_raw)) <= 1            then p_sec
+    when p_game = 'numbers'  and p_sec >= 5  and p_sec <= 300
+                             and abs(round(p_sec * 10) / 10 - p_raw) <= 0.15      then p_sec
+    -- TIMING-of-count games: band-checked only (not derivable from raw).
+    when p_game = 'oddone'    and p_sec >= 0 and p_sec <= 40000 then p_sec
+    when p_game = 'quickmath' and p_sec >= 0 and p_sec <= 40000 then p_sec
+    when p_game = 'chimp'     and p_sec >  0 and p_sec <= 60000 then p_sec
+    else null
+  end;
+$$;
+
+-- Compare two ALREADY-BOUNDED (non-null) secondaries. Returns 1 if the challenger
+-- is BETTER, -1 if worse, 0 if identical — encoding the per-game direction above so
+-- settle_duel and any future caller share ONE definition. Null-handling (absent /
+-- rejected secondary, incl. the anti-suppression rule) lives in settle_duel.
+create or replace function public.duel_secondary_cmp(p_game text, p_ch numeric, p_def numeric)
+returns integer language sql immutable as $$
+  select case
+    when p_ch is null or p_def is null then 0
+    when p_game = 'bullseye' then                              -- HIGHER accuracy is better
+      case when p_ch > p_def then 1 when p_ch < p_def then -1 else 0 end
+    else                                                       -- everyone else: LOWER (faster) is better
+      case when p_ch < p_def then 1 when p_ch > p_def then -1 else 0 end
+  end;
+$$;
+
+
+-- ----------------------------------------------------------------------------
 -- 7. duelable_targets — who can this challenger duel on game X today?
 -- ----------------------------------------------------------------------------
 -- SECURITY DEFINER: it reads OTHER players' game_scores + scores, which RLS
@@ -382,6 +451,13 @@ declare
   v_has_run     boolean;
   v_snap_pts    integer;
   v_snap_label  text;
+  v_snap_raw    numeric;
+  v_snap_sec    numeric;
+  v_ch_sec      numeric;
+  v_def_sec     numeric;
+  v_cmp         integer;
+  v_points_tie  boolean := false;
+  v_is_tie      boolean := false;
   v_server_pts  integer;
   v_won         boolean;
   v_lost_24h    integer;
@@ -446,7 +522,9 @@ begin
   end if;
 
   -- --- defender snapshot: latest same-day score for this game -------------
-  select gs.pts, gs.label into v_snap_pts, v_snap_label
+  -- raw + secondary come along too so the tiebreaker can be settled server-side.
+  select gs.pts, gs.label, gs.raw, gs.secondary
+    into v_snap_pts, v_snap_label, v_snap_raw, v_snap_sec
     from public.game_scores gs
     where gs.profile_id = p_defender and gs.game_id = p_game and gs.day = p_day
     order by gs.created_at desc
@@ -456,10 +534,46 @@ begin
   end if;
 
   -- --- SERVER-AUTHORITATIVE score + verdict ------------------------------
+  -- Points are recomputed from raw (never trusted from the client). On an EXACT
+  -- points tie we break it by the secondary metric (see §6b). Both secondaries are
+  -- bounded/validated before use; the challenger's rides in through p_inputs.
   v_server_pts := public.duel_game_pts(p_game, p_raw);
-  v_won := v_server_pts > v_snap_pts;
+  v_ch_sec  := public.duel_bound_secondary(p_game, p_raw,      (p_inputs->>'secondary')::numeric);
+  v_def_sec := public.duel_bound_secondary(p_game, v_snap_raw, v_snap_sec);
 
-  if v_won then
+  if v_server_pts > v_snap_pts then
+    v_won := true;  v_outcome := 'challenger_win';
+  elsif v_server_pts < v_snap_pts then
+    v_won := false; v_outcome := 'defender_win';
+  else
+    -- POINTS TIE → decide on the secondary metric.
+    v_points_tie := true;
+    if v_def_sec is null then
+      -- No comparable defender secondary (legacy row / no finer signal): we cannot
+      -- fairly break the tie, so it is a genuine push. Don't punish the challenger
+      -- for the defender's missing data.
+      v_cmp := 0;
+    elsif v_ch_sec is null then
+      -- Challenger's secondary is absent or implausible while the defender's is
+      -- valid → challenger LOSES the tiebreak. This closes the suppression exploit
+      -- (omit/garble your secondary on a points tie to force a free push).
+      v_cmp := -1;
+    else
+      v_cmp := public.duel_secondary_cmp(p_game, v_ch_sec, v_def_sec);
+    end if;
+
+    if v_cmp > 0 then
+      v_won := true;  v_outcome := 'challenger_win';
+    elsif v_cmp < 0 then
+      v_won := false; v_outcome := 'defender_win';
+    else
+      -- Dead heat: identical points AND identical (or incomparable) secondary.
+      -- PUSH — no points move, no notification, and the client refunds the duel.
+      v_is_tie := true; v_won := false; v_outcome := 'tie';
+    end if;
+  end if;
+
+  if v_outcome = 'challenger_win' then
     -- Shield budget: at most 300 may leave a defender per rolling 24h.
     select coalesce(sum(transferred_amount), 0) into v_lost_24h
       from public.duels
@@ -483,7 +597,7 @@ begin
         set season_pts = public.scores.season_pts + v_transferred, updated_at = v_now;
 
     v_outcome := 'challenger_win';
-  else
+  elsif v_outcome = 'defender_win' then
     -- LOSS handling. The approved brief specifies only the WIN transfer. To keep
     -- the economy zero-sum and match the existing client's symmetric +/-stake,
     -- the challenger forfeits the stake to the defender, floored at the
@@ -496,6 +610,13 @@ begin
       set season_pts = season_pts + v_transferred, updated_at = v_now
       where profile_id = p_defender and season = p_season;
     v_outcome := 'defender_win';
+  else
+    -- PUSH (outcome = 'tie'): equal points AND equal/incomparable secondary. No
+    -- points move at all — the audit row below still records the encounter (which
+    -- keeps the per-pair 24h cooldown honest, so a draw can't be re-rolled for
+    -- free), but the client is told to REFUND the daily duel so a no-op doesn't
+    -- cost a try. Zero-sum holds trivially: nothing changed hands.
+    v_transferred := 0;
   end if;
 
   -- --- audit row ----------------------------------------------------------
@@ -562,7 +683,12 @@ begin
     'stake',          p_stake,
     'transferred',    v_transferred,
     'partial',        (v_won and v_transferred < p_stake),
-    'outcome',        v_outcome
+    'outcome',        v_outcome,
+    -- tiebreaker signalling for the client's result screen:
+    'points_tie',     v_points_tie,     -- true when points were equal and the secondary decided it
+    'tie',            v_is_tie,         -- true only on an EXACT push (refund the duel, no transfer)
+    'ch_secondary',   v_ch_sec,         -- the validated secondaries (display/debug)
+    'def_secondary',  v_def_sec
   );
 end;
 $$;
@@ -588,6 +714,8 @@ revoke all on function public.duelable_targets(text, text, text, int) from publi
 grant execute on function public.duelable_targets(text, text, text, int) to authenticated, anon;
 
 grant execute on function public.duel_game_pts(text, numeric) to authenticated, anon;
+grant execute on function public.duel_bound_secondary(text, numeric, numeric) to authenticated, anon;
+grant execute on function public.duel_secondary_cmp(text, numeric, numeric) to authenticated, anon;
 grant execute on function public.duel_band_lo(integer) to authenticated, anon;
 grant execute on function public.duel_band_hi(integer) to authenticated, anon;
 grant execute on function public.duel_shield_cap() to authenticated, anon;

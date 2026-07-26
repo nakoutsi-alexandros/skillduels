@@ -1154,9 +1154,13 @@ function DuelDrawGame({ onFinish, onBegin, rounds = 5, fresh }) {
     res.current.push(ms);
     setShown(res.current.length);
     if (res.current.length >= rounds) {
-      const avg = Math.round(res.current.reduce((a, b) => a + b, 0) / res.current.length);
+      const sum = res.current.reduce((a, b) => a + b, 0);
+      const avg = Math.round(sum / res.current.length);
+      // TIEBREAK secondary: the UNROUNDED average ms. pts round the average, so two
+      // players can tie on pts while one is genuinely a hair faster. Lower = better.
+      const avgExact = sum / res.current.length;
       setPhase("done");
-      setTimeout(() => onFinish(avg, Math.max(100, 1000 - avg), `${avg} ms avg`), 700);
+      setTimeout(() => onFinish(avg, Math.max(100, 1000 - avg), `${avg} ms avg`, avgExact), 700);
     } else { setPhase("between"); t1.current = setTimeout(startRound, 720); }
   };
   const startRound = () => {
@@ -1235,7 +1239,9 @@ function BullseyeGame({ onFinish, onBegin, rounds = 5 }) {
       if (r_next(round) >= rounds) {
         const avg = sc.reduce((a, b) => a + b, 0) / sc.length;
         const pts = Math.round(120 + avg * 880);
-        setPhase("done"); setTimeout(() => onFinish(Math.round(avg * 100), pts, `${Math.round(avg * 100)}% accuracy`), 100);
+        // TIEBREAK secondary: unrounded accuracy percent (pts round it). HIGHER = better.
+        const accExact = avg * 100;
+        setPhase("done"); setTimeout(() => onFinish(Math.round(avg * 100), pts, `${Math.round(avg * 100)}% accuracy`, accExact), 100);
       } else startRun(round + 1);
     }, 750);
   };
@@ -1285,7 +1291,10 @@ function NumberRushGame({ onFinish, onBegin, fresh }) {
       if (next === N) {
         const el = (performance.now() - t0.current) / 1000;
         const pts = Math.max(120, Math.min(1000, Math.round(1000 - (el - 9) * 42)));
-        setPhase("done"); setTimeout(() => onFinish(Math.round(el * 10) / 10, pts, `${el.toFixed(1)}s`), 500);
+        // TIEBREAK secondary: full-precision completion seconds (raw is rounded to
+        // 0.1s). Lower = better. A time-to-finish game, so this is the natural finer
+        // measure, read off performance.now() like the fairness model requires.
+        setPhase("done"); setTimeout(() => onFinish(Math.round(el * 10) / 10, pts, `${el.toFixed(1)}s`, el), 500);
       } else setNext(next + 1);
     } else { Sound.beep(300, 0.09, "triangle"); setWrong(n); setTimeout(() => setWrong(-1), 220); }
   };
@@ -1337,9 +1346,16 @@ function OddOneGame({ onFinish, onBegin, fresh }) {
     return { size, cells, base: `hsl(${hue} ${sat}% ${light}%)`, odd, oddColor: `hsl(${hue} ${sat}% ${light + delta}%)` };
   };
   const endAt = useRef(0);
+  // TIEBREAK secondary (fixed 30s window, so "faster to finish" is meaningless):
+  // ms from start to the LAST correct tap. Same count found sooner = better. LOWER =
+  // better. null when nothing was found (no comparable signal → dead-heat push).
+  const startAt = useRef(0);
+  const lastCorrectAt = useRef(null);
   const start = () => {
     rng.current = mulberry32(runSeed("oddone", fresh));
-    endAt.current = performance.now() + ROUND_MS;
+    startAt.current = performance.now();
+    lastCorrectAt.current = null;
+    endAt.current = startAt.current + ROUND_MS;
     setLevel(1); setCorrect(0); setTime(ROUND_S); setBoard(makeBoard(1)); setPhase("play");
   };
   // Clock reads off performance.now() rather than counting ticks — a chained
@@ -1351,10 +1367,10 @@ function OddOneGame({ onFinish, onBegin, fresh }) {
     return () => clearInterval(id);
   }, [phase]);
   useEffect(() => { if (phase === "play" && time <= 0) finish(); }, [phase, time]);
-  const finish = () => { setPhase("done"); const pts = Math.max(120, Math.min(1000, correct * 55 + 100)); setTimeout(() => onFinish(correct, pts, `${correct} found`), 300); };
+  const finish = () => { setPhase("done"); const pts = Math.max(120, Math.min(1000, correct * 55 + 100)); const sec = lastCorrectAt.current != null ? lastCorrectAt.current - startAt.current : null; setTimeout(() => onFinish(correct, pts, `${correct} found`, sec), 300); };
   const tap = (i) => {
     if (phase !== "play" || !board) return;
-    if (i === board.odd) { Sound.beep(720, 0.05); setFlash(i); const lv = level + 1; setCorrect((c) => c + 1); setLevel(lv); setTimeout(() => { setFlash(-2); setBoard(makeBoard(lv)); }, 130); }
+    if (i === board.odd) { Sound.beep(720, 0.05); lastCorrectAt.current = performance.now(); setFlash(i); const lv = level + 1; setCorrect((c) => c + 1); setLevel(lv); setTimeout(() => { setFlash(-2); setBoard(makeBoard(lv)); }, 130); }
     else {
       Sound.beep(300, 0.09, "triangle"); setFlash(-1);
       endAt.current -= 1500; // penalty comes off the deadline, not the displayed value
@@ -1398,25 +1414,33 @@ function ChimpGame({ onFinish, onBegin, fresh }) {
   const [placement, setPlacement] = useState([]); // [{cell, num}]
   // One base seed per run; each round length derives its layout from it.
   const baseSeed = useRef(0);
+  // TIEBREAK secondary: chimp has no time limit and reached-length IS the raw, so
+  // capacity can't be split finer. The finer measure of the SAME skill is recall
+  // FLUENCY — average ms per correct recall tap. Same length recalled faster =
+  // better. LOWER = better. null if no correct taps landed (→ dead-heat push).
+  const recallAt = useRef(0);   // when the current recall window opened / last tap
+  const sumTapMs = useRef(0);
+  const nTaps = useRef(0);
   const buildRound = (num) => {
     const cells = shuffleSeeded(Array.from({ length: CELLS }, (_, i) => i), (baseSeed.current ^ (num * 2654435761)) >>> 0).slice(0, num);
     setPlacement(cells.map((cell, idx) => ({ cell, num: idx + 1 })));
     setNext(1); setPhase("show");
-    setTimeout(() => setPhase("recall"), 600 + num * 260);
+    setTimeout(() => { setPhase("recall"); recallAt.current = performance.now(); }, 600 + num * 260);
   };
-  const start = () => { baseSeed.current = runSeed("chimp", fresh); setN(4); setLives(3); setBest(0); buildRound(4); };
+  const start = () => { baseSeed.current = runSeed("chimp", fresh); sumTapMs.current = 0; nTaps.current = 0; setN(4); setLives(3); setBest(0); buildRound(4); };
   const cellNum = (cell) => placement.find((p) => p.cell === cell)?.num;
   const tap = (cell) => {
     if (phase !== "recall") return;
     const num = cellNum(cell);
     if (num === next) {
+      const t = performance.now(); sumTapMs.current += t - recallAt.current; nTaps.current += 1; recallAt.current = t;
       Sound.beep(660 + next * 30, 0.05); setFlash(cell); setTimeout(() => setFlash(-1), 120);
       if (next === n) { const reached = n; setBest((b) => Math.max(b, reached)); const nn = n + 1; setN(nn); setTimeout(() => buildRound(nn), 350); }
       else setNext(next + 1);
     } else {
       Sound.lose();
       const lv = lives - 1; setLives(lv);
-      if (lv <= 0) { setPhase("done"); const reached = Math.max(best, next - 1 >= 3 ? next - 1 : best); const pts = Math.max(120, Math.min(1000, (Math.max(best, n - 1) - 3) * 140 + 140)); setTimeout(() => onFinish(Math.max(best, n - 1), pts, `reached ${Math.max(best, n - 1)}`), 300); }
+      if (lv <= 0) { setPhase("done"); const reached = Math.max(best, next - 1 >= 3 ? next - 1 : best); const pts = Math.max(120, Math.min(1000, (Math.max(best, n - 1) - 3) * 140 + 140)); const sec = nTaps.current > 0 ? sumTapMs.current / nTaps.current : null; setTimeout(() => onFinish(Math.max(best, n - 1), pts, `reached ${Math.max(best, n - 1)}`, sec), 300); }
       else buildRound(n); // retry same length
     }
   };
@@ -1473,9 +1497,16 @@ function QuickMathGame({ onFinish, onBegin, fresh }) {
     setQ({ text: `${a} ${op} ${b} = ${shown}`, truth });
   };
   const endAt = useRef(0);
+  // TIEBREAK secondary (fixed 30s window): ms from start to the LAST correct answer.
+  // Same count answered sooner = faster = better. LOWER = better. null when nothing
+  // was answered correctly (no comparable signal → dead-heat push).
+  const startAt = useRef(0);
+  const lastCorrectAt = useRef(null);
   const start = () => {
     rng.current = mulberry32(runSeed("quickmath", fresh));
-    endAt.current = performance.now() + ROUND_MS;
+    startAt.current = performance.now();
+    lastCorrectAt.current = null;
+    endAt.current = startAt.current + ROUND_MS;
     setCorrect(0); setStreak(0); setTime(ROUND_S); setPhase("play"); gen();
   };
   useEffect(() => {
@@ -1487,11 +1518,12 @@ function QuickMathGame({ onFinish, onBegin, fresh }) {
     if (phase !== "play" || time > 0) return;
     setPhase("done");
     const pts = Math.max(120, Math.min(1000, correct * 45 + 100));
-    setTimeout(() => onFinish(correct, pts, `${correct} correct`), 300);
+    const sec = lastCorrectAt.current != null ? lastCorrectAt.current - startAt.current : null;
+    setTimeout(() => onFinish(correct, pts, `${correct} correct`, sec), 300);
   }, [phase, time]);
   const answer = (val) => {
     if (phase !== "play" || !q) return;
-    if (val === q.truth) { Sound.beep(720, 0.05); setCorrect((c) => c + 1); setStreak((s) => s + 1); setFlash("ok"); }
+    if (val === q.truth) { Sound.beep(720, 0.05); lastCorrectAt.current = performance.now(); setCorrect((c) => c + 1); setStreak((s) => s + 1); setFlash("ok"); }
     else {
       Sound.beep(300, 0.09, "triangle"); setStreak(0);
       endAt.current -= 2000; // penalty off the deadline so the clock stays truthful
@@ -1593,7 +1625,7 @@ function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "d
     return { pts: base, label: labels[gameId] || `${base} pts` };
   })());
 
-  const finishPlay = async (raw, pts, label) => {
+  const finishPlay = async (raw, pts, label, secondary) => {
     setMyScore({ raw, pts, label });
     if (server) {
       if (settling.current) return; // never settle twice
@@ -1601,7 +1633,7 @@ function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "d
       setPhase("settling");
       let v;
       try {
-        v = await onSettle({ raw, pts, label });
+        v = await onSettle({ raw, pts, label, secondary });
       } catch (e) {
         v = { ok: false, error: "unknown" };
       }
@@ -1612,7 +1644,8 @@ function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "d
       }
       setVerdict(v);
       setPhase("result");
-      setTimeout(() => (v.won ? Sound.win() : Sound.lose()), 300);
+      // A push is neither a win nor a loss — give it its own soft cue.
+      setTimeout(() => (v.tie ? Sound.beep(520, 0.12) : v.won ? Sound.win() : Sound.lose()), 300);
     } else {
       setPhase("result");
       const won = pts > oppScore.current.pts;
@@ -1655,7 +1688,7 @@ function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "d
   }
 
   if (phase === "play") {
-    const on = (raw, pts, label) => finishPlay(raw, pts, label);
+    const on = (raw, pts, label, secondary) => finishPlay(raw, pts, label, secondary);
     // fresh={true} ALWAYS for duels. A duel is a separate, unscored attempt — it
     // must NOT reuse daySeed's grid (the one the challenger already memorized in
     // their own daily run). Passing fresh makes each seeded game draw a random
@@ -1705,11 +1738,48 @@ function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "d
     );
   }
 
+  // The finer, same-skill metric each game breaks a points tie on. Kept in words so
+  // the result screen can explain WHY a dead-even score still had a winner.
+  const metricWord = { draw: "speed", numbers: "speed", oddone: "speed", quickmath: "speed", chimp: "recall speed", bullseye: "precision" }[gameId] || "the tiebreak";
+
+  // ---- exact push (dead heat) ---------------------------------------------
+  // Equal points AND equal/incomparable secondary: nobody wins, nothing moves, and
+  // the duel is refunded (App decrements challengesUsed on { tie: true }).
+  if (server && verdict.tie) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, paddingTop: 24 }}>
+        <div style={{ width: 88, height: 88, borderRadius: 28, display: "flex", alignItems: "center", justifyContent: "center",
+          ...sticker(T.yellow, T.shadow) }}>
+          <Icon name="swords" size={42} color={INK} strokeWidth={2.2} />
+        </div>
+        <div style={{ fontSize: 28, fontWeight: 900, color: INK, fontFamily: T.display, textTransform: "uppercase" }}>Dead heat</div>
+        <Card style={{ width: "100%", display: "flex", justifyContent: "space-around", textAlign: "center" }}>
+          <div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 4 }}><Avatar id={avatar} size={40} /></div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: T.text }}>{myScore.label}</div>
+            <div style={{ color: T.sub, fontSize: 12 }}>{username}</div>
+          </div>
+          <div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 4 }}><Avatar id={opponent.avatar} size={40} /></div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: T.text }}>{verdict.defender_label}</div>
+            <div style={{ color: T.sub, fontSize: 12 }}>{opponent.name}</div>
+          </div>
+        </Card>
+        <div style={{ ...sticker(T.card, T.shadowSm), borderRadius: 12, padding: "12px 16px", textAlign: "center" }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>No points moved — duel refunded</div>
+          <div style={{ color: T.sub, fontSize: 12.5, marginTop: 4 }}>You and {opponent.name} tied on score and on {metricWord}. This one didn't cost you a duel.</div>
+        </div>
+        <BigButton onClick={() => onDone({ tie: true, won: false, transferred: 0, stake })}>Continue</BigButton>
+      </div>
+    );
+  }
+
   // ---- result --------------------------------------------------------------
   const won = server ? !!verdict.won : myScore.pts > oppScore.current.pts;
   const oppLabel = server ? verdict.defender_label : oppScore.current.label;
   const moved = server ? (Number(verdict.transferred) || 0) : stake;
   const partial = server ? (won && moved < stake) : false;
+  const pointsTie = server && !!verdict.points_tie; // equal score, secondary decided it
   const doneArg = server
     ? { won, transferred: moved, partial: !!verdict.partial || partial, stake }
     : { won, transferred: stake, partial: false, offline: true };
@@ -1722,6 +1792,11 @@ function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "d
         <Icon name={won ? "trophy" : "skull"} size={44} color={won ? T.gold : T.red} strokeWidth={2} />
       </div>
       <div style={{ fontSize: 28, fontWeight: 700, color: won ? T.green : T.red, fontFamily: T.display }}>{won ? "WIN!" : "LOSS"}</div>
+      {pointsTie && (
+        <div style={{ ...sticker(T.yellow, T.shadowSm), borderRadius: 999, padding: "5px 14px", fontSize: 12.5, fontWeight: 800, color: INK, textAlign: "center" }}>
+          {won ? `Tied on score — you won on ${metricWord}!` : `Tied on score — ${opponent.name} edged you on ${metricWord}`}
+        </div>
+      )}
       <Card style={{ width: "100%", display: "flex", justifyContent: "space-around", textAlign: "center" }}>
         <div>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 4 }}><Avatar id={avatar} size={40} /></div>
@@ -3247,7 +3322,7 @@ export default function App() {
   // Uses the real leaderboard (`board`) when present, BOTS otherwise.
   const rankAt = (pts) => [...board.filter((b) => b.name !== username).map((b) => b.pts), pts].sort((a, b) => b - a).indexOf(pts) + 1;
 
-  const finish = (raw, pts, label) => {
+  const finish = (raw, pts, label, secondary) => {
     if (practiceMode) {
       showToast(`Practice: ${label} (doesn't count)`);
       setActiveGame(null);
@@ -3259,10 +3334,12 @@ export default function App() {
       setPlayedGames((p) => ({ ...p, [activeGame]: { raw, pts, label } }));
       // Append to the cross-player index so this player is now DUELABLE on this
       // game today (a challenger's snapshot reads the latest same-day row here).
-      // Fire-and-forget: the data layer no-ops offline / not signed in and never
-      // throws, so this cannot break the run. Duel settlement recomputes points
-      // server-side, so the client-side `pts` sent here is display-only.
-      recordGameScore(activeGame, dayKey, raw, pts, label);
+      // `secondary` is the finer tiebreak metric — it becomes this player's snapshot
+      // value that a later duel breaks a points-tie against. Fire-and-forget: the
+      // data layer no-ops offline / not signed in and never throws, so this cannot
+      // break the run. Duel settlement recomputes points server-side, so the
+      // client-side `pts` sent here is display-only.
+      recordGameScore(activeGame, dayKey, raw, pts, label, secondary);
       setCoins((c) => c + Math.round(pts / 10)); // earn coins from performance
       setElo((e) => e + delta);
       if (firstOfDay) setStreak((s) => s + 1);
@@ -3318,6 +3395,15 @@ export default function App() {
       finish();
       return;
     }
+    // PUSH: an exact tie moved no points and must NOT cost a duel. challengesUsed was
+    // incremented up-front in confirmStake, so refund it here. Leaves duelRecord and
+    // challengeDelta untouched (zero-sum: nothing changed hands).
+    if (res && res.tie) {
+      setChallengesUsed((n) => Math.max(0, n - 1));
+      showToast("Dead heat — no points moved, duel refunded");
+      finish();
+      return;
+    }
     const won = !!(res && res.won);
     const moved = Number(res && res.transferred) || 0;
     const partial = !!(res && res.partial);
@@ -3338,9 +3424,9 @@ export default function App() {
   // shield/floor/cooldown/band, and moves points atomically. Returns the verdict
   // (or { ok:false, error }). Null when there is no server target (offline path,
   // where DuelScreen uses its local fallback instead).
-  const settleActiveDuel = async ({ raw }) => {
+  const settleActiveDuel = async ({ raw, secondary }) => {
     if (!hasSupabase || !duelTarget) return null;
-    return settleDuel({ defenderId: duelTarget.defenderId, gameId: duelGame, day: dayKey, season: seasonKey, stake: duelStake, raw });
+    return settleDuel({ defenderId: duelTarget.defenderId, gameId: duelGame, day: dayKey, season: seasonKey, stake: duelStake, raw, secondary });
   };
 
   // Rank across the season leaderboard (for the story card)
