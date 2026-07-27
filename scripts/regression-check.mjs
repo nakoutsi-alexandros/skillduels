@@ -126,6 +126,17 @@ assert.match(app, /current\?\.gameId === gameId[\s\S]*score: awarded/);
 assert.match(app, /@media \(prefers-reduced-motion: reduce\)/);
 assert.match(app, /\.sprite-avatar\s*\{[\s\S]*animation:\s*spriteRun 1\.6s steps\(8\) infinite !important/);
 assert.match(app, /className="sprite-avatar"/);
+const bullseyeGame = app.slice(
+  app.indexOf("function BullseyeGame("),
+  app.indexOf("// ================= GAME: Number Rush"),
+);
+assert.match(bullseyeGame, /markerRef\.current\.style\.left = `\$\{p\}%`/);
+assert.match(bullseyeGame, /data-testid="bullseye-marker"/);
+assert.doesNotMatch(
+  bullseyeGame,
+  /posRef\.current = p;\s*setPos\(p\)/,
+  "Bullseye must not re-render React on every animation frame",
+);
 assert.doesNotMatch(app, /data:image\/png;base64/);
 assert.doesNotMatch(indexHtml, /user-scalable\s*=\s*no/i);
 assert.doesNotMatch(indexHtml, /maximum-scale/i);

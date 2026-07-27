@@ -1313,22 +1313,37 @@ function BullseyeGame({ onFinish, onBegin, rounds = 5, attemptSeed }) {
   const [round, setRound] = useState(0);
   const [scores, setScores] = useState([]);
   const [lastAcc, setLastAcc] = useState(null);
-  const posRef = useRef(0), dir = useRef(1), stopped = useRef(false), raf = useRef(null);
-  useEffect(() => () => cancelAnimationFrame(raf.current), []);
+  const posRef = useRef(0), dir = useRef(1), stopped = useRef(false), raf = useRef(null), markerRef = useRef(null);
 
-  const startRun = (r) => {
-    setRound(r); stopped.current = false; posRef.current = 0; dir.current = 1; setPos(0); setLastAcc(null); setPhase("play");
-    const speed = 0.085 + r * 0.02; // %/ms — faster each round
+  // Keep the hot animation path outside React rendering. Re-rendering this
+  // component on every requestAnimationFrame can starve Chromium's paint step
+  // on lower-power/mobile-sized production tabs: scoring keeps advancing, but
+  // the marker looks frozen until STOP. The ref update paints independently,
+  // while React state is only used to preserve the final stopped position.
+  useEffect(() => {
+    if (phase !== "play") return;
+
+    const speed = 0.085 + round * 0.02; // %/ms — faster each round
     let last = performance.now();
     const loop = (t) => {
       if (stopped.current) return;
-      const dt = t - last; last = t;
+      const dt = Math.min(t - last, 64);
+      last = t;
       let p = posRef.current + dir.current * speed * dt;
-      if (p >= 100) { p = 100; dir.current = -1; } if (p <= 0) { p = 0; dir.current = 1; }
-      posRef.current = p; setPos(p);
+      if (p >= 100) { p = 100; dir.current = -1; }
+      if (p <= 0) { p = 0; dir.current = 1; }
+      posRef.current = p;
+      if (markerRef.current) markerRef.current.style.left = `${p}%`;
       raf.current = requestAnimationFrame(loop);
     };
+
+    if (markerRef.current) markerRef.current.style.left = `${posRef.current}%`;
     raf.current = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf.current);
+  }, [phase, round]);
+
+  const startRun = (r) => {
+    setRound(r); stopped.current = false; posRef.current = 0; dir.current = 1; setPos(0); setLastAcc(null); setPhase("play");
   };
   const stop = () => {
     if (phase !== "play" || stopped.current) return;
@@ -1336,7 +1351,7 @@ function BullseyeGame({ onFinish, onBegin, rounds = 5, attemptSeed }) {
     const dist = Math.abs(posRef.current - 50);
     const acc = Math.max(0, 1 - dist / 50);
     acc > 0.9 ? Sound.win() : acc > 0.6 ? Sound.beep(700, 0.08) : Sound.beep(320, 0.1, "triangle");
-    setLastAcc(acc); setPhase("hit");
+    setPos(posRef.current); setLastAcc(acc); setPhase("hit");
     const sc = [...scores, acc]; setScores(sc);
     setTimeout(() => {
       if (r_next(round) >= rounds) {
@@ -1361,8 +1376,8 @@ function BullseyeGame({ onFinish, onBegin, rounds = 5, attemptSeed }) {
         <div style={{ position: "absolute", top: 0, bottom: 0, left: `${50 - zone}%`, width: `${zone * 2}%`,
           background: `linear-gradient(90deg, ${T.teal}22, ${T.teal}44, ${T.teal}22)`, borderLeft: `2px dashed ${T.teal}88`, borderRight: `2px dashed ${T.teal}88` }} />
         <div style={{ position: "absolute", top: 0, bottom: 0, left: "50%", width: 2, background: `${T.teal}`, transform: "translateX(-50%)" }} />
-        <div style={{ position: "absolute", top: 6, bottom: 6, left: `${pos}%`, width: 8, borderRadius: 4, transform: "translateX(-50%)",
-          background: "#fff", boxShadow: "0 0 14px rgba(255,255,255,0.8)" }} />
+        <div ref={markerRef} data-testid="bullseye-marker" style={{ position: "absolute", top: 6, bottom: 6, left: `${pos}%`, width: 8, borderRadius: 4, transform: "translateX(-50%)",
+          background: "#fff", boxShadow: "0 0 14px rgba(255,255,255,0.8)", willChange: "left" }} />
       </div>
       <div style={{ minHeight: 22, fontSize: 15, fontWeight: 700, fontFamily: T.display,
         color: lastAcc == null ? T.sub : lastAcc > 0.9 ? T.green : lastAcc > 0.6 ? T.teal : T.orange }}>
