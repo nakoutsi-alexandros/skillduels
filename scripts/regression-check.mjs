@@ -5,12 +5,13 @@ import { utcDayKey, utcSeasonEnd, utcSeasonKey, utcSeasonName, utcStreak } from 
 const root = new URL("../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
 const readBytes = (path) => readFile(new URL(path, root));
-const [app, dataLayer, duelsSql, hardeningSql, walletSql, edgeFunction, indexHtml, manifest, touchIcon] = await Promise.all([
+const [app, dataLayer, duelsSql, hardeningSql, walletSql, attemptsSql, edgeFunction, indexHtml, manifest, touchIcon] = await Promise.all([
   read("src/App.jsx"),
   read("src/lib/supabase.js"),
   read("supabase/003_duels.sql"),
   read("supabase/004_security_hardening.sql"),
   read("supabase/005_wallet_inventory.sql"),
+  read("supabase/006_game_attempts.sql"),
   read("supabase/functions/settle-duel/index.ts"),
   read("index.html"),
   read("public/manifest.webmanifest"),
@@ -55,6 +56,13 @@ const serverCatalog = [...walletSql.matchAll(
   /\('((?:av|fr)_[^']+)', '(?:avatar|frame)', (\d+)\)/g,
 )].map(([, id, cost]) => [id, Number(cost)]).sort();
 assert.deepEqual(serverCatalog, clientCatalog, "Server catalog IDs/prices must match the shop UI");
+assert.match(attemptsSql, /create table if not exists public\.game_attempts/i);
+assert.match(attemptsSql, /consumed_at\s+timestamptz/i);
+assert.match(attemptsSql, /seed\s+bigint not null/i);
+assert.match(attemptsSql, /create or replace function public\.start_game_attempt/i);
+assert.match(attemptsSql, /create or replace function public\.consume_game_attempt/i);
+assert.match(attemptsSql, /revoke all on function public\.record_game_score\(text/i);
+assert.match(attemptsSql, /revoke all on function public\.settle_duel\(uuid, text/i);
 
 assert.match(duelsSql, /duel_raw_is_plausible\(p_game, p_raw\)/);
 assert.match(duelsSql, /profile_id in \(v_challenger, p_defender\)[\s\S]*for update/i);
@@ -66,6 +74,7 @@ assert.ok(
 assert.match(duelsSql, /pg_column_size\(coalesce\(p_inputs/);
 assert.match(edgeFunction, /oddone:\s*\{\s*min:\s*0,\s*max:\s*45\s*\}/);
 assert.match(edgeFunction, /quickmath:\s*\{\s*min:\s*0,\s*max:\s*45\s*\}/);
+assert.match(edgeFunction, /p_attempt:\s*attemptId/);
 
 assert.match(app, /challengesUsed,\s*adDuels\s*\}/);
 assert.match(app, /run\.challengesUsed/);
@@ -80,11 +89,15 @@ assert.match(dataLayer, /rpc\("claim_game_coins"/);
 assert.match(dataLayer, /rpc\("claim_reward_drop"/);
 assert.match(dataLayer, /rpc\("purchase_cosmetic"/);
 assert.match(dataLayer, /rpc\("equip_cosmetic"/);
+assert.match(dataLayer, /rpc\("start_game_attempt"/);
 assert.match(dataLayer, /p_slot: slot/);
 assert.match(app, /equippedAvatar=\{equippedAvatar\} equippedFrame=\{equippedFrame\}/);
 assert.match(app, /if \(!hasSupabase\) setCoins\(\(c\) => c \+ Math\.round\(pts \/ 10\)\)/);
 assert.match(app, /Coin packs require verified StoreKit \/ Play Billing/);
 assert.match(app, /disabled=\{!isOwned && !canAfford\}/);
+assert.match(app, /startGameAttempt\(gameId, "daily"/);
+assert.match(app, /startGameAttempt\(gameId, "duel"/);
+assert.match(app, /attemptSeed=\{activeAttempt\?\.seed\}/);
 assert.match(app, /if \(res && res\.error\) \{\s*setChallengesUsed\(\(n\) => Math\.max\(0, n - 1\)\)/);
 assert.match(app, /const activePeriod = useRef\(\{ day: dayKey, season: seasonKey \}\)/);
 assert.match(app, /result\.claimed === false[\s\S]*Daily gift was already claimed/);

@@ -768,12 +768,9 @@ $$;
 -- player; they enforce their own rules and only ever act for / return data to the
 -- authenticated caller. duel_game_pts / band / shield helpers are pure and safe.
 --
--- SEAM FOR THE NEXT HARDENING PASS: once the client emits a full input trace and
--- the Edge Function replays it, lock settle_duel down to service_role only and
--- have the Edge Function call it with the service key + a verified challenger id,
--- so the ONLY way to settle is through the validating function. For now, calling
--- settle_duel directly gains a cheater nothing the Edge Function does not already
--- bound (points are recomputed from raw here regardless of entry point).
+-- Migration 006 revokes this legacy signature from clients and exposes a wrapper
+-- that requires a short-lived, single-use attempt bound to this duel. Keep this
+-- function as the internal atomic settlement core.
 revoke all on function public.settle_duel(uuid, text, text, text, integer, numeric, jsonb) from public;
 grant execute on function public.settle_duel(uuid, text, text, text, integer, numeric, jsonb) to authenticated, anon;
 

@@ -36,7 +36,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 //   - points are a pure function of raw and are recomputed server-side (here AND
 //     in SQL). The client's points/verdict are never trusted. A client cannot
 //     claim "I scored 1000" — the score is derived from the raw it reports.
-// ONLY BOUNDED (not reconstructed from an input trace) for ALL six games:
+// Server-issued attempt IDs are single-use, short-lived, bound to player/game/
+// day/season/defender, and carry a server seed. Raw is still ONLY BOUNDED:
 //   - the RAW value itself is checked against a human-plausible band and rejected
 //     if impossible, but we cannot yet PROVE the player truly achieved that raw,
 //     because the client does not emit a per-event input trace. Reconstructing raw
@@ -124,6 +125,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const defenderId = String(body?.defenderId ?? "");
+  const attemptId = String(body?.attemptId ?? "");
   const gameId = String(body?.gameId ?? "");
   const day = String(body?.day ?? "");
   const season = String(body?.season ?? "");
@@ -131,6 +133,9 @@ Deno.serve(async (req: Request) => {
   const raw = Number(body?.raw);
   const inputs = body?.inputs && typeof body.inputs === "object" ? body.inputs : {};
 
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(attemptId)) {
+    return json({ ok: false, error: "invalid_attempt" }, 400);
+  }
   if (!defenderId || defenderId === challenger) {
     return json({ ok: false, error: "self" }, 400);
   }
@@ -164,6 +169,7 @@ Deno.serve(async (req: Request) => {
 
   // --- settle atomically in the DB ----------------------------------------
   const { data, error } = await supabase.rpc("settle_duel", {
+    p_attempt: attemptId,
     p_defender: defenderId,
     p_game: gameId,
     p_day: day,

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { hasSupabase, getOrCreateSession, getProfile, setNickname, updateAvatar, getMySeasonScore, claimDailyBonus, getWalletState, claimGameCoins, claimRewardDrop, purchaseCosmetic, equipCosmetic, saveDailyRun, getDailyRun, getMyStreak, fetchLeaderboard, deleteAccount, recordGameScore, getDuelableTargets, startDuel, settleDuel, getNotifications, markNotificationsRead } from "./lib/supabase";
+import { hasSupabase, getOrCreateSession, getProfile, setNickname, updateAvatar, getMySeasonScore, claimDailyBonus, getWalletState, claimGameCoins, claimRewardDrop, purchaseCosmetic, equipCosmetic, saveDailyRun, getDailyRun, getMyStreak, fetchLeaderboard, deleteAccount, startGameAttempt, recordGameScore, getDuelableTargets, startDuel, settleDuel, getNotifications, markNotificationsRead } from "./lib/supabase";
 import { pad2, utcDayKey, utcSeasonEnd, utcSeasonKey, utcSeasonName } from "./lib/time";
 
 // ================= v3 design tokens — neo-brutalist =================
@@ -1204,7 +1204,11 @@ const shuffleSeeded = (arr, seed) => {
 // The scored daily attempt shares one seed so everyone plays the same challenge and
 // the leaderboard means something. Practice and replays get a fresh seed — drilling
 // the identical grid over and over teaches the answers, not the skill.
-const runSeed = (id, fresh) => (fresh ? (Math.random() * 4294967296) >>> 0 : daySeed(id));
+const runSeed = (id, fresh, attemptSeed) => (
+  Number.isFinite(Number(attemptSeed))
+    ? Number(attemptSeed) >>> 0
+    : fresh ? (Math.random() * 4294967296) >>> 0 : daySeed(id)
+);
 
 // Timed rounds share one length and one clock reader.
 const ROUND_S = 30, ROUND_MS = ROUND_S * 1000;
@@ -1231,7 +1235,7 @@ const GameIntro = ({ icon, color, title, sub, onStart, cta = "Start" }) => (
 );
 
 // ================= GAME: Duel Draw (signature) — react on green, HOLD on red =================
-function DuelDrawGame({ onFinish, onBegin, rounds = 5, fresh }) {
+function DuelDrawGame({ onFinish, onBegin, rounds = 5, fresh, attemptSeed }) {
   const [phase, setPhase] = useState("intro"); // intro|wait|green|red|early|badhit|between|done
   const [shown, setShown] = useState(0);
   const res = useRef([]);
@@ -1256,7 +1260,7 @@ function DuelDrawGame({ onFinish, onBegin, rounds = 5, fresh }) {
     } else { setPhase("between"); t1.current = setTimeout(startRound, 720); }
   };
   const startRound = () => {
-    if (!rng.current) rng.current = mulberry32(runSeed("draw", fresh));
+    if (!rng.current) rng.current = mulberry32(runSeed("draw", fresh, attemptSeed));
     setPhase("wait");
     const red = rng.current() < 0.32;
     const wait = 1100 + rng.current() * 1800;
@@ -1296,7 +1300,7 @@ function DuelDrawGame({ onFinish, onBegin, rounds = 5, fresh }) {
 }
 
 // ================= GAME: Bullseye — stop the sweeper in the zone =================
-function BullseyeGame({ onFinish, onBegin, rounds = 5 }) {
+function BullseyeGame({ onFinish, onBegin, rounds = 5, attemptSeed }) {
   const [phase, setPhase] = useState("intro"); // intro|play|hit|done
   const [pos, setPos] = useState(0);
   const [round, setRound] = useState(0);
@@ -1363,7 +1367,7 @@ function BullseyeGame({ onFinish, onBegin, rounds = 5 }) {
 }
 
 // ================= GAME: Number Rush — tap 1→25 in order (Schulte) =================
-function NumberRushGame({ onFinish, onBegin, fresh }) {
+function NumberRushGame({ onFinish, onBegin, fresh, attemptSeed }) {
   const N = 25;
   const [phase, setPhase] = useState("intro"); // intro|play|done
   const [next, setNext] = useState(1);
@@ -1373,7 +1377,7 @@ function NumberRushGame({ onFinish, onBegin, fresh }) {
   const nums = useRef([]);
   useEffect(() => { if (phase !== "play") return; const id = setInterval(() => setNow(performance.now()), 97); return () => clearInterval(id); }, [phase]);
   const start = () => {
-    nums.current = shuffleSeeded(Array.from({ length: N }, (_, i) => i + 1), runSeed("numbers", fresh));
+    nums.current = shuffleSeeded(Array.from({ length: N }, (_, i) => i + 1), runSeed("numbers", fresh, attemptSeed));
     setNext(1); t0.current = performance.now(); setNow(t0.current); setPhase("play");
   };
   const tap = (n) => {
@@ -1420,7 +1424,7 @@ function NumberRushGame({ onFinish, onBegin, fresh }) {
 }
 
 // ================= GAME: Odd One Out — spot the different tile =================
-function OddOneGame({ onFinish, onBegin, fresh }) {
+function OddOneGame({ onFinish, onBegin, fresh, attemptSeed }) {
   const [phase, setPhase] = useState("intro"); // intro|play|done
   const [level, setLevel] = useState(1);
   const [time, setTime] = useState(ROUND_S);
@@ -1444,7 +1448,7 @@ function OddOneGame({ onFinish, onBegin, fresh }) {
   const startAt = useRef(0);
   const lastCorrectAt = useRef(null);
   const start = () => {
-    rng.current = mulberry32(runSeed("oddone", fresh));
+    rng.current = mulberry32(runSeed("oddone", fresh, attemptSeed));
     startAt.current = performance.now();
     lastCorrectAt.current = null;
     endAt.current = startAt.current + ROUND_MS;
@@ -1495,7 +1499,7 @@ function OddOneGame({ onFinish, onBegin, fresh }) {
 }
 
 // ================= GAME: Chimp Test — memorize the order =================
-function ChimpGame({ onFinish, onBegin, fresh }) {
+function ChimpGame({ onFinish, onBegin, fresh, attemptSeed }) {
   const SIZE = 5, CELLS = 25;
   const [phase, setPhase] = useState("intro"); // intro|show|recall|done
   const [n, setN] = useState(4);
@@ -1519,7 +1523,7 @@ function ChimpGame({ onFinish, onBegin, fresh }) {
     setNext(1); setPhase("show");
     setTimeout(() => { setPhase("recall"); recallAt.current = performance.now(); }, 600 + num * 260);
   };
-  const start = () => { baseSeed.current = runSeed("chimp", fresh); sumTapMs.current = 0; nTaps.current = 0; setN(4); setLives(3); setBest(0); buildRound(4); };
+  const start = () => { baseSeed.current = runSeed("chimp", fresh, attemptSeed); sumTapMs.current = 0; nTaps.current = 0; setN(4); setLives(3); setBest(0); buildRound(4); };
   const cellNum = (cell) => placement.find((p) => p.cell === cell)?.num;
   const tap = (cell) => {
     if (phase !== "recall") return;
@@ -1569,7 +1573,7 @@ function ChimpGame({ onFinish, onBegin, fresh }) {
 }
 
 // ================= GAME: Quick Math — true or false, fast =================
-function QuickMathGame({ onFinish, onBegin, fresh }) {
+function QuickMathGame({ onFinish, onBegin, fresh, attemptSeed }) {
   const [phase, setPhase] = useState("intro"); // intro|play|done
   const [time, setTime] = useState(ROUND_S);
   const [correct, setCorrect] = useState(0);
@@ -1595,7 +1599,7 @@ function QuickMathGame({ onFinish, onBegin, fresh }) {
   const startAt = useRef(0);
   const lastCorrectAt = useRef(null);
   const start = () => {
-    rng.current = mulberry32(runSeed("quickmath", fresh));
+    rng.current = mulberry32(runSeed("quickmath", fresh, attemptSeed));
     startAt.current = performance.now();
     lastCorrectAt.current = null;
     endAt.current = startAt.current + ROUND_MS;
@@ -1669,6 +1673,12 @@ const duelErrText = (code) => ({
   self: "You can't duel yourself.",
   bad_stake: "That stake isn't allowed.",
   daily_limit: "You've reached today's duel limit.",
+  attempt_limit: "Too many attempts opened today — try again tomorrow.",
+  invalid_attempt: "Game attempt couldn't be verified — reopen the game.",
+  attempt_used: "That game attempt was already submitted.",
+  attempt_expired: "Game attempt expired — reopen the game.",
+  attempt_too_fast: "That result arrived too quickly to verify.",
+  already_scored: "This game already has a scored attempt today.",
   inputs_too_large: "That duel result was too large to verify.",
   wrong_period: "The daily challenge rolled over — reopen the duel.",
   implausible_raw: "That result looked off and was rejected.",
@@ -1685,7 +1695,7 @@ const duelErrText = (code) => ({
 //     renders whatever verdict comes back and NEVER computes points itself.
 //   * OFFLINE fallback (no onSettle): the old fake-oppScore path, so the app still
 //     works with no backend / no keys. Points here are display-only.
-function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "draw", onSettle = null, target = null }) {
+function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "draw", onSettle = null, target = null, attemptSeed = null }) {
   const [phase, setPhase] = useState("vs"); // vs | play | settling | result | error
   const [count, setCount] = useState(3);
   const [myScore, setMyScore] = useState(null);   // {raw, pts, label}
@@ -1793,12 +1803,12 @@ function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "d
     // there — passed for consistency.)
     return (
       <div>
-        {gameId === "draw" && <DuelDrawGame rounds={3} onFinish={on} fresh />}
-        {gameId === "bullseye" && <BullseyeGame rounds={3} onFinish={on} fresh />}
-        {gameId === "numbers" && <NumberRushGame onFinish={on} fresh />}
-        {gameId === "oddone" && <OddOneGame onFinish={on} fresh />}
-        {gameId === "chimp" && <ChimpGame onFinish={on} fresh />}
-        {gameId === "quickmath" && <QuickMathGame onFinish={on} fresh />}
+        {gameId === "draw" && <DuelDrawGame rounds={3} onFinish={on} fresh attemptSeed={attemptSeed} />}
+        {gameId === "bullseye" && <BullseyeGame rounds={3} onFinish={on} fresh attemptSeed={attemptSeed} />}
+        {gameId === "numbers" && <NumberRushGame onFinish={on} fresh attemptSeed={attemptSeed} />}
+        {gameId === "oddone" && <OddOneGame onFinish={on} fresh attemptSeed={attemptSeed} />}
+        {gameId === "chimp" && <ChimpGame onFinish={on} fresh attemptSeed={attemptSeed} />}
+        {gameId === "quickmath" && <QuickMathGame onFinish={on} fresh attemptSeed={attemptSeed} />}
       </div>
     );
   }
@@ -3091,6 +3101,8 @@ export default function App() {
   const [duelGame, setDuelGame] = useState("draw");
   const [pickGame, setPickGame] = useState(null); // chosen game in the stake sheet (null until picked)
   const [duelTarget, setDuelTarget] = useState(null); // resolved server duel target { defenderId, name, avatar, snapshotPts, snapshotLabel }
+  const [activeAttempt, setActiveAttempt] = useState(null); // server-issued daily attempt { id, seed }
+  const [duelAttempt, setDuelAttempt] = useState(null); // server-issued duel attempt { id, seed }
   // Cross-player duelability, keyed by nickname → { defenderId, name, avatar, pts,
   // games: { [gameId]: { snapshotPts, snapshotLabel } } }. Only players who scored a
   // game today AND pass the server's band/shield/grace/cooldown checks appear here;
@@ -3229,6 +3241,8 @@ export default function App() {
       setLastChallenge(0);
       setDuelNotifs([]);
       setDuelableByName({});
+      setActiveAttempt(null);
+      setDuelAttempt(null);
     }
     if (seasonChanged) {
       setServerSeasonPts(null);
@@ -3507,6 +3521,26 @@ export default function App() {
   // Uses the real leaderboard (`board`) when present, BOTS otherwise.
   const rankAt = (pts) => [...board.filter((b) => b.name !== username).map((b) => b.pts), pts].sort((a, b) => b - a).indexOf(pts) + 1;
 
+  const launchGame = async (gameId, practice = false) => {
+    setGameLive(false);
+    setPracticeMode(practice);
+    setActiveAttempt(null);
+    const scored = !practice && !playedGames[gameId];
+    if (hasSupabase && scored) {
+      const attempt = await startGameAttempt(gameId, "daily", dayKey, seasonKey);
+      if (!attempt?.ok) {
+        showToast(duelErrText(attempt?.error));
+        return;
+      }
+      setActiveAttempt({
+        id: attempt.attempt_id,
+        seed: Number(attempt.seed),
+        gameId,
+      });
+    }
+    setActiveGame(gameId);
+  };
+
   const finish = (raw, pts, label, secondary) => {
     if (practiceMode) {
       showToast(`Practice: ${label} (doesn't count)`);
@@ -3515,6 +3549,7 @@ export default function App() {
     }
     if (!playedGames[activeGame]) {
       const gameId = activeGame;
+      const attemptId = activeAttempt?.id || null;
       const delta = Math.max(-15, Math.min(28, Math.round((pts - 480) / 22)));
       const firstOfDay = Object.keys(playedGames).length === 0;
       setPlayedGames((p) => ({ ...p, [gameId]: { raw, pts, label } }));
@@ -3525,7 +3560,7 @@ export default function App() {
       // data layer no-ops offline / not signed in and never throws, so this cannot
       // break the run. Duel settlement recomputes points server-side, so the
       // client-side `pts` sent here is display-only.
-      recordGameScore(gameId, dayKey, seasonKey, raw, label, secondary).then(async (res) => {
+      recordGameScore(attemptId, gameId, dayKey, seasonKey, raw, label, secondary, { secondary }).then(async (res) => {
         const authoritative = Number(res?.balance);
         const awarded = Number(res?.points);
         if (res?.ok) {
@@ -3565,6 +3600,7 @@ export default function App() {
         rewardSource: { type: "game", gameId },
         gameId,
       });
+      setActiveAttempt(null);
     } else {
       showToast(`Practice: ${label} (doesn't count)`);
     }
@@ -3633,7 +3669,7 @@ export default function App() {
   // The server returns the new balance after moving the transfer. On an error
   // nothing moves and no win/loss is recorded.
   const duelDone = (res) => {
-    const finish = () => { setDuelOpp(null); setDuelTarget(null); setDuelStake(0); if (hasSupabase) loadDuelable(); };
+    const finish = () => { setDuelOpp(null); setDuelTarget(null); setDuelAttempt(null); setDuelStake(0); if (hasSupabase) loadDuelable(); };
     if (res && res.error) {
       setChallengesUsed((n) => Math.max(0, n - 1));
       showToast(res.message || "Duel couldn't be settled — no points changed");
@@ -3673,7 +3709,7 @@ export default function App() {
   // where DuelScreen uses its local fallback instead).
   const settleActiveDuel = async ({ raw, secondary }) => {
     if (!hasSupabase || !duelTarget) return null;
-    return settleDuel({ defenderId: duelTarget.defenderId, gameId: duelGame, day: dayKey, season: seasonKey, stake: duelStake, raw, secondary });
+    return settleDuel({ attemptId: duelAttempt?.id, defenderId: duelTarget.defenderId, gameId: duelGame, day: dayKey, season: seasonKey, stake: duelStake, raw, secondary });
   };
 
   // Rank across the season leaderboard (for the story card)
@@ -3773,6 +3809,7 @@ export default function App() {
       setDuelGame(gameId || "draw");
       setDuelStake(amount);
       setDuelTarget(null);
+      setDuelAttempt(null);
       setDuelOpp(opp);
       setChallengesUsed((n) => n + 1);
       setLastChallenge(Date.now());
@@ -3790,10 +3827,17 @@ export default function App() {
       loadDuelable();
       return;
     }
+    const attempt = await startGameAttempt(gameId, "duel", dayKey, seasonKey, info.defenderId);
+    if (!attempt?.ok) {
+      showToast(duelErrText(attempt?.error));
+      loadDuelable();
+      return;
+    }
     const fresh = pre.target;
     setDuelGame(gameId);
     setDuelStake(amount);
     setDuelTarget({ defenderId: fresh.defenderId, name: fresh.name, avatar: fresh.avatar, snapshotPts: fresh.snapshotPts, snapshotLabel: fresh.snapshotLabel });
+    setDuelAttempt({ id: attempt.attempt_id, seed: Number(attempt.seed), gameId });
     setDuelOpp({ name: fresh.name, avatar: fresh.avatar, pts: fresh.pts });
     setChallengesUsed((n) => n + 1);
     setLastChallenge(Date.now());
@@ -4080,19 +4124,19 @@ export default function App() {
       <div style={{ padding: "2px 20px 0", position: "relative" }}>
         {duelOpp ? (
           <>
-            <button onClick={() => setDuelOpp(null)}
+            <button onClick={() => { setDuelOpp(null); setDuelAttempt(null); }}
               className="pressable"
               style={{ ...sticker(T.card, `3px 3px 0 ${INK}`), borderRadius: 10, color: INK, fontSize: 13,
                 fontWeight: 800, fontFamily: T.font, cursor: "pointer", padding: "7px 13px", margin: "0 0 14px" }}>
               ‹ Cancel
             </button>
             <DuelScreen opponent={duelOpp} onDone={duelDone} avatar={avatar} username={username} stake={duelStake} gameId={duelGame}
-              onSettle={hasSupabase && duelTarget ? settleActiveDuel : null} target={duelTarget} />
+              onSettle={hasSupabase && duelTarget ? settleActiveDuel : null} target={duelTarget} attemptSeed={duelAttempt?.seed} />
           </>
         ) : activeGame ? (
           <>
             {(practiceMode || isReplay || !gameLive) ? (
-              <button onClick={() => setActiveGame(null)}
+              <button onClick={() => { setActiveGame(null); setActiveAttempt(null); }}
                 className="pressable"
               style={{ ...sticker(T.card, `3px 3px 0 ${INK}`), borderRadius: 10, color: INK, fontSize: 13,
                 fontWeight: 800, fontFamily: T.font, cursor: "pointer", padding: "7px 13px", margin: "0 0 14px" }}>
@@ -4122,12 +4166,12 @@ export default function App() {
             ) : (
               <div style={{ color: T.sub, fontSize: 13, marginBottom: 18, fontWeight: 700 }}>One attempt — make it count!</div>
             )}
-            {activeGame === "draw" && <DuelDrawGame onFinish={finish} onBegin={() => setGameLive(true)} fresh={unscored} />}
-            {activeGame === "bullseye" && <BullseyeGame onFinish={finish} onBegin={() => setGameLive(true)} fresh={unscored} />}
-            {activeGame === "numbers" && <NumberRushGame onFinish={finish} onBegin={() => setGameLive(true)} fresh={unscored} />}
-            {activeGame === "oddone" && <OddOneGame onFinish={finish} onBegin={() => setGameLive(true)} fresh={unscored} />}
-            {activeGame === "chimp" && <ChimpGame onFinish={finish} onBegin={() => setGameLive(true)} fresh={unscored} />}
-            {activeGame === "quickmath" && <QuickMathGame onFinish={finish} onBegin={() => setGameLive(true)} fresh={unscored} />}
+            {activeGame === "draw" && <DuelDrawGame onFinish={finish} onBegin={() => setGameLive(true)} fresh={unscored} attemptSeed={activeAttempt?.seed} />}
+            {activeGame === "bullseye" && <BullseyeGame onFinish={finish} onBegin={() => setGameLive(true)} fresh={unscored} attemptSeed={activeAttempt?.seed} />}
+            {activeGame === "numbers" && <NumberRushGame onFinish={finish} onBegin={() => setGameLive(true)} fresh={unscored} attemptSeed={activeAttempt?.seed} />}
+            {activeGame === "oddone" && <OddOneGame onFinish={finish} onBegin={() => setGameLive(true)} fresh={unscored} attemptSeed={activeAttempt?.seed} />}
+            {activeGame === "chimp" && <ChimpGame onFinish={finish} onBegin={() => setGameLive(true)} fresh={unscored} attemptSeed={activeAttempt?.seed} />}
+            {activeGame === "quickmath" && <QuickMathGame onFinish={finish} onBegin={() => setGameLive(true)} fresh={unscored} attemptSeed={activeAttempt?.seed} />}
           </>
         ) : (
           <>
@@ -4142,8 +4186,8 @@ export default function App() {
             )}
             {tab === "today" && (
               <TodayScreen playedGames={playedGames} streak={streak} totalPts={totalPts}
-                openGame={(id) => { setGameLive(false); setPracticeMode(false); setActiveGame(id); }}
-                openPractice={(id) => { setGameLive(false); setPracticeMode(true); setActiveGame(id); }}
+                openGame={(id) => launchGame(id, false)}
+                openPractice={(id) => launchGame(id, true)}
                 onPractice={() => setPracticeOpen(true)}
                 countdown={countdown} rewardClaimed={rewardClaimed} claimReward={claimReward}
                 onShare={() => { setShareOpen(true); setCopied(false); }} onDuel={() => { if (!guardDuelIntro("picker")) setPickerOpen(true); }}
@@ -4401,7 +4445,7 @@ export default function App() {
             Pick a game to warm up. Unlimited attempts — score isn't recorded.
           </div>
           {GAMES.map((g) => (
-            <div key={g.id} className="pressable" onClick={() => { setPracticeOpen(false); setGameLive(false); setPracticeMode(true); setActiveGame(g.id); }}
+            <div key={g.id} className="pressable" onClick={() => { setPracticeOpen(false); launchGame(g.id, true); }}
               style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 10px", borderRadius: 14, cursor: "pointer",
                 borderBottom: `2px solid ${INK}` }}>
               <div style={{ width: 46, height: 46, borderRadius: 15, display: "flex", alignItems: "center", justifyContent: "center",

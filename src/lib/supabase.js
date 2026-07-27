@@ -431,7 +431,27 @@ export async function fetchLeaderboard(season, limit = 100) {
 // daily-game finish handler, fire-and-forget. No-op offline / not signed in.
 //   day: "YYYY-MM-DD" (same local day as daySeed/dayKey)
 // ---------------------------------------------------------------------------
-export async function recordGameScore(gameId, day, season, raw, label, secondary) {
+export async function startGameAttempt(gameId, mode, day, season, defenderId = null) {
+  if (!supabase) return { ok: false, error: "offline" };
+  try {
+    const { data, error } = await supabase.rpc("start_game_attempt", {
+      p_game: gameId,
+      p_mode: mode,
+      p_day: day,
+      p_season: season,
+      p_defender: defenderId,
+    });
+    if (error) {
+      console.warn("[supabase] startGameAttempt error:", error.message);
+      return { ok: false, error: "unknown", message: error.message };
+    }
+    return data || { ok: false, error: "unknown" };
+  } catch (e) {
+    return { ok: false, error: "unknown", message: e?.message || String(e) };
+  }
+}
+
+export async function recordGameScore(attemptId, gameId, day, season, raw, label, secondary, inputs = {}) {
   if (!supabase) return { ok: false, error: "offline" };
   try {
     // `secondary` is the finer tiebreak metric for this game (see 003_duels.sql
@@ -440,12 +460,14 @@ export async function recordGameScore(gameId, day, season, raw, label, secondary
     // the attempt produced no finer signal (e.g. 0 correct in a timed game).
     const secNum = Number(secondary);
     const { data, error } = await supabase.rpc("record_game_score", {
+      p_attempt: attemptId,
       p_game: gameId,
       p_day: day,
       p_season: season,
       p_raw: Number(raw),
       p_label: label ? String(label) : "",
       p_secondary: Number.isFinite(secNum) ? secNum : null,
+      p_inputs: inputs && typeof inputs === "object" ? inputs : {},
     });
     if (error) {
       // Table may not exist yet (migration not run) — degrade quietly.
@@ -533,7 +555,7 @@ export async function startDuel(defenderId, gameId, day, season) {
 // and used to break a points tie — so the tiebreaker needs NO Edge Function change or
 // redeploy. Only the SQL (003_duels.sql) has to be re-run.
 // ---------------------------------------------------------------------------
-export async function settleDuel({ defenderId, gameId, day, season, stake, raw, secondary, inputs }) {
+export async function settleDuel({ attemptId, defenderId, gameId, day, season, stake, raw, secondary, inputs }) {
   if (!supabase) return { ok: false, error: "offline" };
   try {
     const secNum = Number(secondary);
@@ -543,6 +565,7 @@ export async function settleDuel({ defenderId, gameId, day, season, stake, raw, 
     };
     const { data, error } = await supabase.functions.invoke("settle-duel", {
       body: {
+        attemptId,
         defenderId,
         gameId,
         day,
