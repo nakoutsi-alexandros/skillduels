@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { hasSupabase, getOrCreateSession, getProfile, setNickname, saveScore, saveDailyRun, getDailyRun, fetchLeaderboard, deleteAccount, recordGameScore, getDuelableTargets, startDuel, settleDuel, getNotifications, markNotificationsRead } from "./lib/supabase";
+import { hasSupabase, getOrCreateSession, getProfile, setNickname, getMySeasonScore, claimDailyBonus, saveDailyRun, getDailyRun, fetchLeaderboard, deleteAccount, recordGameScore, getDuelableTargets, startDuel, settleDuel, getNotifications, markNotificationsRead } from "./lib/supabase";
+import { pad2, utcDayKey, utcSeasonEnd, utcSeasonKey, utcSeasonName } from "./lib/time";
 
 // ================= v3 design tokens — neo-brutalist =================
 // Cream paper, ink outlines, hard offset shadows. Every surface is a sticker:
@@ -514,12 +515,13 @@ const BigButton = ({ children, onClick, color = T.blue, style }) => (
   </button>
 );
 
-const Switch = ({ on, toggle }) => (
-  <div onClick={toggle} style={{ width: 52, height: 30, borderRadius: 8, background: on ? T.green : T.card2,
+const Switch = ({ on, toggle, label }) => (
+  <button type="button" onClick={toggle} role="switch" aria-checked={on} aria-label={label}
+    style={{ width: 52, height: 30, padding: 0, borderRadius: 8, background: on ? T.green : T.card2,
     border: `${T.bw} solid ${INK}`, position: "relative", transition: "background 200ms", cursor: "pointer", flexShrink: 0 }}>
     <div style={{ position: "absolute", top: 2, left: on ? 24 : 2, width: 22, height: 22, borderRadius: 5,
-      background: "#fff", border: `2px solid ${INK}`, transition: "left 200ms" }} />
-  </div>
+      background: "#fff", border: `2px solid ${INK}`, transition: "left 200ms", pointerEvents: "none" }} />
+  </button>
 );
 
 // Swipe-to-dismiss for bottom sheets. The grabber was previously decorative — it
@@ -575,17 +577,62 @@ function useSheetDrag(onClose) {
   };
 }
 
-const Sheet = ({ onClose, children }) => {
+const Sheet = ({ onClose, children, label = "Dialog" }) => {
   const { panel, handleProps, bodyProps, motion, backdropOpacity } = useSheetDrag(onClose);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const previous = document.activeElement;
+    const node = panel.current;
+    node?.focus();
+    const onKey = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeRef.current();
+        return;
+      }
+      if (event.key !== "Tab" || !node) return;
+      const focusable = [...node.querySelectorAll(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )];
+      if (!focusable.length) {
+        event.preventDefault();
+        node.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      if (previous && typeof previous.focus === "function") previous.focus();
+    };
+  }, [panel]);
   return (
     <div onClick={onClose} style={{ position: "absolute", inset: 0, background: `rgba(20,18,15,${backdropOpacity})`,
       transition: "background 200ms", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
       <div ref={panel} onClick={(e) => e.stopPropagation()} {...bodyProps}
+        role="dialog" aria-modal="true" aria-label={label} tabIndex={-1}
         style={{ width: "100%", maxWidth: 400, boxSizing: "border-box", background: T.bg,
           borderRadius: "26px 26px 0 0", padding: "10px 20px 30px",
           borderTop: `3px solid ${INK}`, borderLeft: `3px solid ${INK}`, borderRight: `3px solid ${INK}`,
-          maxHeight: "85vh", overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", ...motion }}
+          maxHeight: "85vh", overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain",
+          position: "relative", outline: "none", ...motion }}
         className="sd-scroll">
+        <button type="button" className="pressable" onClick={onClose} aria-label={`Close ${label}`}
+          style={{ position: "absolute", top: 12, right: 14, zIndex: 2, width: 34, height: 34,
+            cursor: "pointer", ...sticker(T.card, `3px 3px 0 ${INK}`), borderRadius: 9,
+            display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Icon name="x" size={16} color={INK} strokeWidth={3} />
+        </button>
         {/* Generous invisible hit area — a 6px bar is far too small a drag target. */}
         <div {...handleProps} style={{ ...handleProps.style, padding: "8px 0 14px", margin: "-8px 0 0" }}>
           <div style={{ width: 44, height: 6, borderRadius: 3, background: INK, margin: "0 auto" }} />
@@ -600,20 +647,38 @@ const Sheet = ({ onClose, children }) => {
 // and every open starts from a clean slate.
 const NavSheet = ({ sections, tab, onGo, onClose }) => {
   const { panel, handleProps, bodyProps, motion, backdropOpacity } = useSheetDrag(onClose);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const previous = document.activeElement;
+    const node = panel.current;
+    node?.focus();
+    const onKey = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeRef.current();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      if (previous && typeof previous.focus === "function") previous.focus();
+    };
+  }, [panel]);
   return (
     <>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, zIndex: 45,
         transition: "background 200ms", background: `rgba(20,18,15,${backdropOpacity})` }} />
-      <div ref={panel} {...bodyProps}
+      <div ref={panel} {...bodyProps} role="dialog" aria-modal="true" aria-label="Navigation menu" tabIndex={-1}
         style={{ position: "absolute", left: 0, right: 0, bottom: 0, zIndex: 46, background: T.bg,
           borderTop: `3px solid ${INK}`, borderRadius: "26px 26px 0 0", padding: "10px 20px 30px",
-          overscrollBehavior: "contain", ...motion }}>
+          overscrollBehavior: "contain", outline: "none", ...motion }}>
         <div {...handleProps} style={{ ...handleProps.style, padding: "8px 0 14px", margin: "-8px 0 0" }}>
           <div style={{ width: 44, height: 6, borderRadius: 3, background: INK, margin: "0 auto" }} />
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 20, color: INK, textTransform: "uppercase" }}>Go to</div>
-          <button className="pressable" onClick={onClose}
+          <button className="pressable" onClick={onClose} aria-label="Close navigation menu"
             style={{ width: 34, height: 34, cursor: "pointer", ...sticker(T.card, `3px 3px 0 ${INK}`), borderRadius: 9,
               display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Icon name="x" size={16} color={INK} strokeWidth={3} />
@@ -1100,7 +1165,7 @@ const mulberry32 = (a) => () => {
 };
 const daySeed = (id) => {
   const d = new Date();
-  let s = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  let s = d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
   for (let i = 0; i < id.length; i++) s = (Math.imul(s, 31) + id.charCodeAt(i)) >>> 0;
   return s >>> 0;
 };
@@ -1576,6 +1641,9 @@ const duelErrText = (code) => ({
   no_target_score: "That player hasn't played this game today.",
   self: "You can't duel yourself.",
   bad_stake: "That stake isn't allowed.",
+  daily_limit: "You've reached today's duel limit.",
+  wrong_period: "The daily challenge rolled over — reopen the duel.",
+  implausible_raw: "That result looked off and was rejected.",
   not_authenticated: "You need to be signed in to duel.",
   offline: "Duels need a connection — try again in a moment.",
   rejected: "That result looked off and was rejected.",
@@ -2079,7 +2147,7 @@ function Onboarding({ onDone, onClaimNickname }) {
           <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, alignSelf: "flex-start", letterSpacing: 0.3, marginBottom: 8 }}>PICK AN AVATAR</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, width: "100%", marginBottom: 18 }}>
             {AVATARS.map((a) => (
-              <button key={a} className="pressable" onClick={() => { setAvatar(a); Sound.beep(700, 0.05); }}
+              <button key={a} className="pressable" aria-label={`Select avatar ${a}`} onClick={() => { setAvatar(a); Sound.beep(700, 0.05); }}
                 style={{ padding: 7, borderRadius: 12, cursor: "pointer", display: "flex", justifyContent: "center",
                   border: `${T.bw} solid ${INK}`, background: avatar === a ? T.yellow : T.card,
                   boxShadow: avatar === a ? T.shadowMd : T.shadowSm, transition: "background 150ms" }}>
@@ -2762,7 +2830,7 @@ function ProfileScreen({ elo, streak, playedGames, totalPts, duelRecord, openSet
       {/* Identity */}
       <div style={{ ...sticker(T.card, T.shadow), borderRadius: 16, padding: 20,
         display: "flex", flexDirection: "column", alignItems: "center" }}>
-        <button onClick={onEditAvatar} className="pressable"
+        <button onClick={onEditAvatar} className="pressable" aria-label="Edit avatar"
           style={{ width: 96, height: 96, borderRadius: "50%", padding: 5, border: `${T.bw} solid ${INK}`,
             background: T.yellow, display: "flex", alignItems: "center", justifyContent: "center",
             position: "relative", cursor: "pointer", boxShadow: "none" }}>
@@ -2963,8 +3031,10 @@ export default function App() {
   const [streak, setStreak] = useState(6);
   const [toast, setToast] = useState(null);
   const [rewardClaimed, setRewardClaimed] = useState(false);
+  const [rewardClaiming, setRewardClaiming] = useState(false);
   const [reveal, setReveal] = useState(null); // post-run / claim panel payload
   const [bonusPts, setBonusPts] = useState(0);
+  const [serverSeasonPts, setServerSeasonPts] = useState(null);
   const [duelXP, setDuelXP] = useState(0);
   const [duelRecord, setDuelRecord] = useState({ w: 0, l: 0 });
   const [duelOpp, setDuelOpp] = useState(null); // opponent object while dueling
@@ -2987,7 +3057,7 @@ export default function App() {
   //   'duel_defended' → an attacker challenged and lost; we won their forfeited
   //                     stake (+).
   // The client learns of them no other way, so we mirror the net here (a signed
-  // delta) and fold it into seasonPts, so our own debounced saveScore re-writes the
+  // delta) and use it as an offline/session UI mirror; the backend balance remains
   // SAME transferred total and can never revert the server's move — which in the
   // loss direction would create points from nothing (inflation) and in the defence
   // direction would destroy the attacker's forfeited stake (deflation). Derived
@@ -3044,16 +3114,14 @@ export default function App() {
     const iv = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(iv);
   }, []);
-  const seasonEnd = new Date();
-  seasonEnd.setMonth(seasonEnd.getMonth() + 1, 1);
-  seasonEnd.setHours(0, 0, 0, 0);
+  const seasonEnd = utcSeasonEnd(now);
   const diff = Math.max(0, seasonEnd.getTime() - now);
-  const pad = (n) => String(n).padStart(2, "0");
+  const pad = pad2;
   const dLeft = Math.floor(diff / 86400000);
   const hLeft = Math.floor((diff % 86400000) / 3600000);
   const mLeft = Math.floor((diff % 3600000) / 60000);
   const countdown = `${dLeft}d ${pad(hLeft)}h ${pad(mLeft)}m`;
-  const SEASON_NAME = seasonEnd.toLocaleString("en-US", { month: "long" });
+  const SEASON_NAME = utcSeasonName(now);
 
   // ONE unified score: Season Points. Everything feeds this. Ranking is derived from it.
   // Resets on the 1st of each month; top 3 earn cosmetic rewards.
@@ -3065,26 +3133,23 @@ export default function App() {
   // defender drop below 0 (it clamps each transfer to the defender's balance), so
   // the floor can only guard a transient client under-shoot — it never re-creates
   // points the server actually refused to take.
-  const seasonPts = Math.max(0, SEASON_BASE + totalPts + challengeDelta + incomingDelta);
+  const localSeasonPts = Math.max(0, SEASON_BASE + totalPts + challengeDelta + incomingDelta);
+  const seasonPts = hasSupabase && serverSeasonPts !== null ? serverSeasonPts : localSeasonPts;
   const balance = seasonPts; // same number everywhere
 
   // Season key the backend stores scores under, e.g. "2026-07". Matches the
   // monthly reset: a new month = a new key = a fresh scores row, old one kept.
-  const seasonKey = `${seasonEnd.getFullYear()}-${pad(new Date().getMonth() + 1)}`;
+  const seasonKey = utcSeasonKey(now);
 
   // Day key the backend stores the daily run under, e.g. "2026-07-24". This is
   // the SAME local-calendar "today" that daySeed() uses to pick the challenge, so
   // a real new day gives a fresh (empty) run while a same-day refresh restores the
   // locked run. Derived from `now` so it rolls over at local midnight.
-  const dayNow = new Date(now);
-  const dayKey = `${dayNow.getFullYear()}-${pad(dayNow.getMonth() + 1)}-${pad(dayNow.getDate())}`;
+  const dayKey = utcDayKey(now);
   // Local-calendar day key for an arbitrary timestamp (a notification's created_at).
   // Used to scope incoming-duel losses to TODAY: Season Points reset daily (they do
   // not accumulate across days), so only same-day losses feed today's total.
-  const localDayKey = (ts) => {
-    const d = new Date(ts);
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  };
+  const localDayKey = (ts) => utcDayKey(ts);
 
   // ---- Boot: session → profile → leaderboard (runs once) -------------------
   useEffect(() => {
@@ -3106,14 +3171,15 @@ export default function App() {
         // games, the +50 daily gift, and the net duel points — so the rebuilt
         // seasonPts equals exactly what it was before the refresh (see the
         // reconciliation note by the save effect below).
-        const d = new Date();
-        const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        const key = utcDayKey();
         const run = await getDailyRun(key);
         if (alive && run && typeof run === "object") {
           if (run.played && typeof run.played === "object") setPlayedGames(run.played);
           if (typeof run.bonusPts === "number") setBonusPts(run.bonusPts);
           if (typeof run.rewardClaimed === "boolean") setRewardClaimed(run.rewardClaimed);
           if (typeof run.challengeDelta === "number") setChallengeDelta(run.challengeDelta);
+          if (typeof run.challengesUsed === "number") setChallengesUsed(Math.max(0, run.challengesUsed));
+          if (typeof run.adDuels === "number") setAdDuels(Math.max(0, Math.min(5, run.adDuels)));
           // Instant bridge: the last-known incoming net delta (losses − gains), so
           // seasonPts is already adjusted the moment the save gate opens, even
           // before the authoritative reconcile below returns.
@@ -3124,10 +3190,12 @@ export default function App() {
         // including any that landed while we were away. Only overwrites when we got
         // a real answer (null = fetch failed → keep the bridged value rather than
         // clobber a real transfer). This closes the boot window where the first
-        // saveScore could otherwise re-write the pre-transfer total and revert it.
+        // the server balance remains the source of truth throughout boot.
         const bootNet = await sumIncomingNetForDay(key);
         if (alive && bootNet !== null) setIncomingDelta(bootNet);
       }
+      const ownScore = await getMySeasonScore(seasonKey);
+      if (alive && ownScore !== null) setServerSeasonPts(ownScore);
       const rows = await fetchLeaderboard(seasonKey);
       if (alive && rows.length) setBoard(rows);
       // Restore is done → open the save gate. Any state we just set has already
@@ -3138,38 +3206,25 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---- Persist Season Points (debounced) -----------------------------------
-  // Writes at most once per ~1.2s of quiet after the number changes, so a run
-  // that bumps several values doesn't fire a burst of saves. Only after the
-  // player has a nickname (is onboarded) and the backend is configured.
-  const saveTimer = useRef(null);
-  useEffect(() => {
-    if (!hasSupabase || !onboarded || !hydrated) return; // `hydrated` closes the boot clobber race
-    clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => { saveScore(seasonKey, seasonPts); }, 1200);
-    return () => clearTimeout(saveTimer.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seasonPts, onboarded, hydrated]);
-
   // ---- Persist today's run (debounced) -------------------------------------
   // Mirrors the score save above, but writes the daily RUN so a refresh restores
   // it. RECONCILIATION: rather than persist challengeDelta on its own and risk the
   // rebuilt seasonPts drifting below the saved score, we store the WHOLE run blob
   // (played games + the +50 gift + net duel points) under today's day key. On
   // boot we replay all of it before opening the save gate, so seasonPts is
-  // reconstructed identically and saveScore never writes a value lower than
+  // reconstructed identically while the server score remains authoritative.
   // reality. Keyed by dayKey (YYYY-MM-DD) so a genuine new day starts empty while
   // a same-day refresh restores the locked run. Same `hydrated` gate as above.
   const runSaveTimer = useRef(null);
   useEffect(() => {
     if (!hasSupabase || !onboarded || !hydrated) return;
     clearTimeout(runSaveTimer.current);
-    const run = { played: playedGames, bonusPts, rewardClaimed, challengeDelta, incomingDelta };
+    const run = { played: playedGames, bonusPts, rewardClaimed, challengeDelta, incomingDelta, challengesUsed, adDuels };
     const key = dayKey;
     runSaveTimer.current = setTimeout(() => { saveDailyRun(key, run); }, 1200);
     return () => clearTimeout(runSaveTimer.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playedGames, bonusPts, rewardClaimed, challengeDelta, incomingDelta, onboarded, hydrated]);
+  }, [playedGames, bonusPts, rewardClaimed, challengeDelta, incomingDelta, challengesUsed, adDuels, onboarded, hydrated]);
 
   const showToast = (msg) => {
     setToast(msg);
@@ -3265,8 +3320,12 @@ export default function App() {
   // reverting a real transfer).
   const reconcileIncoming = async () => {
     if (!hasSupabase) return;
-    const net = await sumIncomingNetForDay(dayKey);
+    const [net, latestScore] = await Promise.all([
+      sumIncomingNetForDay(dayKey),
+      getMySeasonScore(seasonKey),
+    ]);
     if (net !== null) setIncomingDelta(net);
+    if (latestScore !== null) setServerSeasonPts(latestScore);
   };
 
   // Load duelability + notifications once boot has restored today's run. Re-runs if
@@ -3339,13 +3398,17 @@ export default function App() {
       // data layer no-ops offline / not signed in and never throws, so this cannot
       // break the run. Duel settlement recomputes points server-side, so the
       // client-side `pts` sent here is display-only.
-      recordGameScore(activeGame, dayKey, raw, pts, label, secondary);
+      recordGameScore(activeGame, dayKey, seasonKey, raw, label, secondary).then((res) => {
+        const authoritative = Number(res?.balance);
+        if (res?.ok && Number.isFinite(authoritative)) setServerSeasonPts(authoritative);
+        else if (hasSupabase) showToast("Score saved locally; server sync failed");
+      });
       setCoins((c) => c + Math.round(pts / 10)); // earn coins from performance
       setElo((e) => e + delta);
       if (firstOfDay) setStreak((s) => s + 1);
       // Bank the run behind the reveal panel instead of a toast that scrolls past.
       setReveal({
-        headline: "Run complete",
+        headline: "Game complete",
         result: label,
         score: pts,
         pct: Math.max(12, Math.min(99, Math.round(pts / 10))), // games score out of 1000
@@ -3359,13 +3422,25 @@ export default function App() {
     setActiveGame(null);
   };
 
-  const claimReward = () => {
-    if (rewardClaimed || reveal) return;
+  const claimReward = async () => {
+    if (rewardClaimed || rewardClaiming || reveal) return;
+    setRewardClaiming(true);
     setRewardClaimed(true);
+    const result = hasSupabase
+      ? await claimDailyBonus(dayKey, seasonKey)
+      : { ok: true, claimed: true, points: 50 };
+    setRewardClaiming(false);
+    if (!result?.ok) {
+      setRewardClaimed(false);
+      showToast("Daily gift couldn't be claimed — try again");
+      return;
+    }
     setBonusPts(50);
+    const authoritative = Number(result.balance);
+    if (Number.isFinite(authoritative)) setServerSeasonPts(authoritative);
     setReveal({
       headline: "Daily gift",
-      score: 50,
+      score: result.claimed === false ? 0 : 50,
       pct: null, // no field to compare against — this one is just handed to you
       rankUp: Math.max(0, rankAt(seasonPts) - rankAt(seasonPts + 50)),
       streak,
@@ -3385,8 +3460,7 @@ export default function App() {
   //   error:   { error: true, message }
   // Points are NEVER recomputed here — we reflect the server's `transferred` into
   // OUR OWN challengeDelta only (+transferred on a win, −transferred on a loss).
-  // Because the challenger's next debounced saveScore writes base+games+delta, and
-  // the server moved the same `transferred`, the two stay consistent. On an error
+  // The server returns the new balance after moving the transfer. On an error
   // nothing moves and no win/loss is recorded.
   const duelDone = (res) => {
     const finish = () => { setDuelOpp(null); setDuelTarget(null); setDuelStake(0); if (hasSupabase) loadDuelable(); };
@@ -3407,6 +3481,8 @@ export default function App() {
     const won = !!(res && res.won);
     const moved = Number(res && res.transferred) || 0;
     const partial = !!(res && res.partial);
+    const authoritative = Number(res && res.challenger_balance);
+    if (Number.isFinite(authoritative)) setServerSeasonPts(authoritative);
     setDuelRecord((r) => ({ w: r.w + (won ? 1 : 0), l: r.l + (won ? 0 : 1) }));
     if (duelStake > 0) {
       setChallengeDelta((d) => d + (won ? moved : -moved));
@@ -3608,7 +3684,7 @@ export default function App() {
   const equippedItem = SHOP_ITEMS.find((it) => it.id === equipped);
   const equippedFrameId = equippedItem && equippedItem.type === "frame" ? equippedItem.frame : null;
 
-  const userEntry = totalPts > 0 ? { name: username, avatar, pts: totalPts } : null;
+  const userEntry = seasonPts > 0 ? { name: username, avatar, pts: seasonPts } : null;
   const game = GAMES.find((g) => g.id === activeGame);
   const isReplay = activeGame && playedGames[activeGame];
   // Nothing is being recorded → the challenge should be new rather than the day's fixed one.
@@ -3745,6 +3821,7 @@ export default function App() {
           <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
             {[["chevronLeft", -1], ["chevron", 1]].map(([ic, dir]) => (
               <button key={ic} className="pressable" onClick={() => step(dir)}
+                aria-label={dir < 0 ? "Previous section" : "Next section"}
                 style={{ width: 38, height: 38, cursor: "pointer", ...sticker(T.card, `3px 3px 0 ${INK}`),
                   borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Icon name={ic} size={18} color={INK} strokeWidth={3} />
@@ -3864,7 +3941,7 @@ export default function App() {
       {pickerOpen && (() => {
         const targets = hasSupabase ? Object.values(duelableByName) : null;
         return (
-        <Sheet onClose={() => setPickerOpen(false)}>
+        <Sheet onClose={() => setPickerOpen(false)} label="Pick opponent">
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
             <div style={{ flex: 1, minWidth: 0, fontSize: 20, fontWeight: 700, fontFamily: T.display, display: "flex", alignItems: "center", gap: 8 }}><Icon name="swords" size={20} color={T.red} />Pick opponent</div>
             <DuelHelpLink onOpen={() => { setDuelHelpThen(null); setDuelHelpOpen(true); }} />
@@ -3916,7 +3993,7 @@ export default function App() {
 
       {/* Stake selection sheet */}
       {stakeFor && (
-        <Sheet onClose={() => setStakeFor(null)}>
+        <Sheet onClose={() => setStakeFor(null)} label="Choose duel stake">
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
             <div style={{ flex: 1, minWidth: 0, fontSize: 20, fontWeight: 700, fontFamily: T.display, display: "flex", alignItems: "center", gap: 8 }}>
               <Icon name="swords" size={20} color={T.red} />Set your stake
@@ -3995,7 +4072,7 @@ export default function App() {
 
       {/* Share sheet */}
       {shareOpen && (
-        <Sheet onClose={() => setShareOpen(false)}>
+        <Sheet onClose={() => setShareOpen(false)} label="Share score">
           <div style={{ fontSize: 20, fontWeight: 700, fontFamily: T.display, marginBottom: 12 }}>Share your score</div>
 
           {/* 9:16 story card preview */}
@@ -4070,7 +4147,7 @@ export default function App() {
 
       {/* Practice picker sheet */}
       {practiceOpen && (
-        <Sheet onClose={() => setPracticeOpen(false)}>
+        <Sheet onClose={() => setPracticeOpen(false)} label="Choose practice game">
           <div style={{ fontSize: 20, fontWeight: 700, fontFamily: T.display, marginBottom: 4,
             display: "flex", alignItems: "center", gap: 8 }}>
             <Icon name="dumbbell" size={20} color={T.green} strokeWidth={2.1} />Practice
@@ -4098,7 +4175,7 @@ export default function App() {
 
       {/* Rewarded ad prompt (out of free challenges) */}
       {adPromptFor && (
-        <Sheet onClose={() => setAdPromptFor(null)}>
+        <Sheet onClose={() => setAdPromptFor(null)} label="Unlock another duel">
           <div style={{ textAlign: "center", padding: "6px 0" }}>
             <div style={{ width: 64, height: 64, borderRadius: 20, margin: "0 auto 14px", display: "flex", alignItems: "center", justifyContent: "center",
               background: "#D6F5E7", border: `1px solid ${T.green}44` }}>
@@ -4136,7 +4213,7 @@ export default function App() {
 
       {/* Season rewards sheet */}
       {rewardsOpen && (
-        <Sheet onClose={() => setRewardsOpen(false)}>
+        <Sheet onClose={() => setRewardsOpen(false)} label="Season rewards">
           <div style={{ fontSize: 20, fontWeight: 700, fontFamily: T.display, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
             <Icon name="crown" size={20} color={T.yellow} />Season Rewards
           </div>
@@ -4171,7 +4248,7 @@ export default function App() {
 
       {/* Help / scoring sheet */}
       {helpOpen && (
-        <Sheet onClose={() => setHelpOpen(false)}>
+        <Sheet onClose={() => setHelpOpen(false)} label="How scoring works">
           <div style={{ fontSize: 20, fontWeight: 700, fontFamily: T.display, marginBottom: 4 }}>How points are scored</div>
           <div style={{ color: T.sub, fontSize: 13, marginBottom: 12 }}>Same rules for everyone, every day</div>
           <PointsGuide />
@@ -4182,7 +4259,7 @@ export default function App() {
 
       {/* How duels work — the plain-player explainer */}
       {duelHelpOpen && (
-        <Sheet onClose={closeDuelHelp}>
+        <Sheet onClose={closeDuelHelp} label="How duels work">
           <div style={{ fontSize: 20, fontWeight: 700, fontFamily: T.display, marginBottom: 4, display: "flex", alignItems: "center", gap: 8 }}>
             <Icon name="swords" size={20} color={T.red} />How duels work
           </div>
@@ -4195,7 +4272,7 @@ export default function App() {
 
       {/* Avatar picker (from profile) */}
       {avatarPickerOpen && (
-        <Sheet onClose={() => setAvatarPickerOpen(false)}>
+        <Sheet onClose={() => setAvatarPickerOpen(false)} label="Choose avatar">
           <div style={{ fontSize: 20, fontWeight: 700, fontFamily: T.display, marginBottom: 4 }}>Choose your look</div>
           <div style={{ color: T.sub, fontSize: 13, marginBottom: 16 }}>Tap an icon to equip it. Buy more in the Shop.</div>
 
@@ -4212,7 +4289,7 @@ export default function App() {
           <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, letterSpacing: 0.3, marginBottom: 10 }}>ICON</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 20 }}>
             {avatarOptions.map((a) => (
-              <button key={a} className="pressable" onClick={() => { setAvatar(a); Sound.beep(700, 0.05); }}
+              <button key={a} className="pressable" aria-label={`Select avatar ${a}`} onClick={() => { setAvatar(a); Sound.beep(700, 0.05); }}
                 style={{ padding: 7, borderRadius: 16, cursor: "pointer", display: "flex", justifyContent: "center",
                   boxSizing: "border-box", width: "100%", minWidth: 0, aspectRatio: "1",
                   border: `${T.bw} solid ${INK}`, boxShadow: avatar === a ? T.shadowMd : T.shadowSm,
@@ -4232,7 +4309,7 @@ export default function App() {
               <span style={{ fontSize: 11, color: T.sub }}>None</span>
             </button>
             {SHOP_ITEMS.filter((it) => it.type === "frame" && owned.includes(it.id)).map((it) => (
-              <button key={it.id} className="pressable" onClick={() => setEquipped(it.id)}
+              <button key={it.id} className="pressable" aria-label={`Equip frame ${it.name}`} onClick={() => setEquipped(it.id)}
                 style={{ padding: 6, borderRadius: 16, cursor: "pointer", background: T.card, boxSizing: "border-box",
                   border: `${T.bw} solid ${INK}`, boxShadow: equipped === it.id ? T.shadowMd : T.shadowSm, display: "flex", flexDirection: "column",
                   alignItems: "center", gap: 4, width: "100%" }}>
@@ -4251,12 +4328,12 @@ export default function App() {
 
       {/* Settings sheet */}
       {settingsOpen && (
-        <Sheet onClose={() => { setSettingsOpen(false); setConfirmDelete(false); setDeleteErr(null); }}>
+        <Sheet onClose={() => { setSettingsOpen(false); setConfirmDelete(false); setDeleteErr(null); }} label="Settings">
           <div style={{ fontSize: 20, fontWeight: 700, fontFamily: T.display, marginBottom: 16 }}>Settings</div>
           <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, letterSpacing: 0.3, marginBottom: 8 }}>AVATAR</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 18 }}>
             {avatarOptions.map((a) => (
-              <button key={a} className="pressable" onClick={() => setAvatar(a)}
+              <button key={a} className="pressable" aria-label={`Select avatar ${a}`} onClick={() => setAvatar(a)}
                 style={{ padding: 7, borderRadius: 16, cursor: "pointer", display: "flex", justifyContent: "center",
                   border: `${T.bw} solid ${INK}`, boxShadow: avatar === a ? T.shadowMd : T.shadowSm,
                   background: avatar === a ? T.yellow : T.card }}>
@@ -4265,7 +4342,7 @@ export default function App() {
             ))}
           </div>
           <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, letterSpacing: 0.3, marginBottom: 8 }}>USERNAME</div>
-          <input value={username} onChange={(e) => setUsername(e.target.value.slice(0, 16))} autoComplete="off"
+          <input aria-label="Username" value={username} onChange={(e) => setUsername(e.target.value.slice(0, 16))} autoComplete="off"
             style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: `${T.bw} solid ${INK}`,
               background: T.card, color: INK, fontSize: 16, fontFamily: T.font, outline: "none",
               marginBottom: 18, boxSizing: "border-box" }} />
@@ -4275,12 +4352,14 @@ export default function App() {
               <div style={{ fontSize: 15, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}><Icon name="sound" size={17} color={INK} strokeWidth={2.1} /> Sounds</div>
               <div style={{ color: T.sub, fontSize: 12 }}>Sound effects in games</div>
             </div>
-            <Switch on={soundOn} toggle={() => { const v = !soundOn; setSoundOn(v); Sound.on = v; if (v) Sound.beep(880, 0.08); }} />
+            <Switch label="Sound effects" on={soundOn} toggle={() => { const v = !soundOn; setSoundOn(v); Sound.on = v; if (v) Sound.beep(880, 0.08); }} />
           </div>
-          <BigButton color={T.card2} style={{ boxShadow: "none", border: `${T.bw} solid ${INK}`, marginBottom: 12 }}
-            onClick={() => { setPlayedGames({}); setBonusPts(0); setRewardClaimed(false); setSettingsOpen(false); showToast("Day reset (demo)"); }}>
-            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}><Icon name="refresh" size={17} color={INK} strokeWidth={2.2} /> Reset day (demo)</span>
-          </BigButton>
+          {!hasSupabase && (
+            <BigButton color={T.card2} style={{ boxShadow: "none", border: `${T.bw} solid ${INK}`, marginBottom: 12 }}
+              onClick={() => { setPlayedGames({}); setBonusPts(0); setRewardClaimed(false); setChallengesUsed(0); setAdDuels(0); setSettingsOpen(false); showToast("Day reset (demo)"); }}>
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}><Icon name="refresh" size={17} color={INK} strokeWidth={2.2} /> Reset day (demo)</span>
+            </BigButton>
+          )}
 
           {/* Danger zone — GDPR erasure. Only shown with a real backend (there is no
               account to delete on the offline BOTS path). A single tap opens a

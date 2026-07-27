@@ -3,17 +3,23 @@
 This is the **founder-only** deploy guide for the duel backend foundation. It has
 two independent parts:
 
-1. **Run the SQL migration** `supabase/003_duels.sql` (tables + settlement + anti-cheat functions).
+1. **Run the SQL migrations** `supabase/003_duels.sql` and then
+   `supabase/004_security_hardening.sql` (settlement, anti-cheat and
+   server-authoritative scores).
 2. **Deploy the Edge Function** `supabase/functions/settle-duel` (the settlement front door).
 
 Both need **your** Supabase login (dashboard or CLI). Claude cannot do either — it
 has no access to your Supabase account, and these are outward-facing changes that
 require your explicit confirmation.
 
-Nothing here deletes or overwrites existing data. The migration only **adds**
-tables and functions. Until BOTH parts are deployed, the app keeps working exactly
-as today (the duel screen still uses the local fake-opponent path — see "What is
-safe to ship before deploy" below).
+Deploy `003_duels.sql`, then `004_security_hardening.sql`, and only then deploy
+the updated client. Migration 004 preserves current balances, removes direct
+client writes to score tables, and installs the validated game/bonus RPCs.
+
+Nothing here deletes existing data. Migration 004 preserves current balances,
+adds the hardened RPCs, and removes direct client write access to score tables.
+Until the SQL and Edge Function changes are deployed, the updated client uses a
+read-only compatibility fallback for the current score.
 
 ---
 
@@ -31,7 +37,9 @@ safe to ship before deploy" below).
 2. Open `supabase/003_duels.sql` in the repo, copy the **whole file**, paste it in.
 3. Click **Run**. It is safe to re-run (everything is `IF NOT EXISTS` /
    `CREATE OR REPLACE`).
-4. Sanity check — run these in a new query and confirm they return without error:
+4. Open `supabase/004_security_hardening.sql`, copy the **whole file**, paste it
+   into a new query, and click **Run**.
+5. Sanity check — run these in a new query and confirm they return without error:
 
    ```sql
    -- tables exist

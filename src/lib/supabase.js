@@ -133,34 +133,49 @@ export async function setNickname(nickname, avatar) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Save the player's Season Points for the current season. Upserts on
-// (profile_id, season) so it overwrites the same row every time rather than
-// piling up history within a season. Call this debounced from the UI.
-//   season: a "YYYY-MM" string, e.g. "2026-07"
-// ---------------------------------------------------------------------------
-export async function saveScore(season, seasonPts) {
+// The total is server-authoritative. Game, bonus and duel RPCs are its only
+// writers; the browser may read it but can never submit an arbitrary total.
+export async function getMySeasonScore(season) {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.rpc("get_my_season_score", {
+      p_season: season,
+    });
+    if (error) {
+      // Rolling-deploy compatibility: before migration 004 reaches the database,
+      // RLS still permits a read of the caller's own row. This fallback is read-only.
+      const { data: row, error: readError } = await supabase
+        .from("scores")
+        .select("season_pts")
+        .eq("season", season)
+        .maybeSingle();
+      if (readError) {
+        console.warn("[supabase] getMySeasonScore error:", readError.message);
+        return null;
+      }
+      const fallback = Number(row?.season_pts);
+      return Number.isFinite(fallback) ? fallback : 0;
+    }
+    const score = Number(data);
+    return Number.isFinite(score) ? score : 0;
+  } catch (e) {
+    console.warn("[supabase] getMySeasonScore error:", e?.message || e);
+    return null;
+  }
+}
+
+export async function claimDailyBonus(day, season) {
   if (!supabase) return { ok: false, error: "offline" };
   try {
-    const { data: auth } = await supabase.auth.getUser();
-    const uid = auth?.user?.id;
-    if (!uid) return { ok: false, error: "offline" };
-
-    const { error } = await supabase.from("scores").upsert(
-      {
-        profile_id: uid,
-        season,
-        season_pts: Math.round(seasonPts) || 0,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "profile_id,season" }
-    );
-
+    const { data, error } = await supabase.rpc("claim_daily_bonus", {
+      p_day: day,
+      p_season: season,
+    });
     if (error) {
-      console.warn("[supabase] saveScore error:", error.message);
+      console.warn("[supabase] claimDailyBonus error:", error.message);
       return { ok: false, error: "unknown", message: error.message };
     }
-    return { ok: true };
+    return data || { ok: false, error: "unknown" };
   } catch (e) {
     return { ok: false, error: "unknown", message: e?.message || String(e) };
   }
@@ -274,33 +289,28 @@ export async function fetchLeaderboard(season, limit = 100) {
 // daily-game finish handler, fire-and-forget. No-op offline / not signed in.
 //   day: "YYYY-MM-DD" (same local day as daySeed/dayKey)
 // ---------------------------------------------------------------------------
-export async function recordGameScore(gameId, day, raw, pts, label, secondary) {
+export async function recordGameScore(gameId, day, season, raw, label, secondary) {
   if (!supabase) return { ok: false, error: "offline" };
   try {
-    const { data: auth } = await supabase.auth.getUser();
-    const uid = auth?.user?.id;
-    if (!uid) return { ok: false, error: "offline" };
-
     // `secondary` is the finer tiebreak metric for this game (see 003_duels.sql
     // §6b). It is the DEFENDER's snapshot value a later duel breaks a points-tie
     // against, so it must be persisted alongside raw/pts. Nullable: send null when
     // the attempt produced no finer signal (e.g. 0 correct in a timed game).
     const secNum = Number(secondary);
-    const { error } = await supabase.from("game_scores").insert({
-      profile_id: uid,
-      game_id: gameId,
-      day,
-      raw: Number(raw) || 0,
-      pts: Math.round(pts) || 0,
-      label: label ? String(label) : "",
-      secondary: Number.isFinite(secNum) ? secNum : null,
+    const { data, error } = await supabase.rpc("record_game_score", {
+      p_game: gameId,
+      p_day: day,
+      p_season: season,
+      p_raw: Number(raw),
+      p_label: label ? String(label) : "",
+      p_secondary: Number.isFinite(secNum) ? secNum : null,
     });
     if (error) {
       // Table may not exist yet (migration not run) — degrade quietly.
       console.warn("[supabase] recordGameScore error:", error.message);
       return { ok: false, error: "unknown", message: error.message };
     }
-    return { ok: true };
+    return data || { ok: false, error: "unknown" };
   } catch (e) {
     return { ok: false, error: "unknown", message: e?.message || String(e) };
   }

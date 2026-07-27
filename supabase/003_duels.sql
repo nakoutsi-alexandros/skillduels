@@ -226,6 +226,24 @@ as $$
   end;
 $$;
 
+-- Defence-in-depth for every entry point. The Edge Function performs the same
+-- check, but direct RPC calls must not be able to bypass plausible raw limits.
+create or replace function public.duel_raw_is_plausible(p_game text, p_raw numeric)
+returns boolean
+language sql
+immutable
+as $$
+  select p_raw is not null and case p_game
+    when 'draw'      then p_raw between 90 and 5000
+    when 'bullseye'  then p_raw between 0 and 100
+    when 'numbers'   then p_raw between 5 and 300
+    when 'oddone'    then p_raw between 0 and 45
+    when 'chimp'     then p_raw between 0 and 25
+    when 'quickmath' then p_raw between 0 and 45
+    else false
+  end;
+$$;
+
 
 -- ----------------------------------------------------------------------------
 -- 6. GAME-ECONOMY TUNABLES — matchmaking band + shield constants
@@ -480,17 +498,47 @@ begin
   if p_stake not in (50, 100, 200) then
     return jsonb_build_object('ok', false, 'error', 'bad_stake');
   end if;
-
-  -- --- lock the defender's score row (serializes incoming duels) -----------
-  select season_pts into v_def_pts
-    from public.scores
-    where profile_id = p_defender and season = p_season
-    for update;
-  if not found then
-    return jsonb_build_object('ok', false, 'error', 'no_target_score');
+  if p_day <> to_char(current_date, 'YYYY-MM-DD')
+     or p_season <> to_char(current_date, 'YYYY-MM') then
+    return jsonb_build_object('ok', false, 'error', 'wrong_period');
+  end if;
+  if not public.duel_raw_is_plausible(p_game, p_raw) then
+    return jsonb_build_object('ok', false, 'error', 'implausible_raw');
+  end if;
+  if (
+    select count(*) >= 8
+      from public.duels
+      where challenger_id = v_challenger
+        and day = p_day
+        and status = 'settled'
+        and outcome in ('challenger_win', 'defender_win')
+  ) then
+    return jsonb_build_object('ok', false, 'error', 'daily_limit');
   end if;
 
-  -- --- challenger's current points ----------------------------------------
+  -- Ensure the challenger has a row, then lock BOTH balances in UUID order.
+  -- Deterministic ordering prevents deadlocks when two players duel each other,
+  -- and locking the challenger closes the concurrent-loss negative-balance race.
+  if not exists (
+    select 1 from public.scores
+      where profile_id = p_defender and season = p_season
+  ) then
+    return jsonb_build_object('ok', false, 'error', 'no_target_score');
+  end if;
+  insert into public.scores (profile_id, season, season_pts, updated_at)
+    values (v_challenger, p_season, 0, v_now)
+    on conflict (profile_id, season) do nothing;
+  perform 1
+    from public.scores
+    where season = p_season
+      and profile_id in (v_challenger, p_defender)
+    order by profile_id
+    for update;
+
+  -- --- locked current balances --------------------------------------------
+  select season_pts into v_def_pts
+    from public.scores
+    where profile_id = p_defender and season = p_season;
   select coalesce(season_pts, 0) into v_ch_pts
     from public.scores where profile_id = v_challenger and season = p_season;
   v_ch_pts := coalesce(v_ch_pts, 0);
@@ -673,6 +721,9 @@ begin
     ), v_now);
   end if;
 
+  select coalesce(season_pts, 0) into v_ch_pts
+    from public.scores where profile_id = v_challenger and season = p_season;
+
   return jsonb_build_object(
     'ok',             true,
     'duel_id',        v_duel_id,
@@ -684,6 +735,7 @@ begin
     'transferred',    v_transferred,
     'partial',        (v_won and v_transferred < p_stake),
     'outcome',        v_outcome,
+    'challenger_balance', v_ch_pts,
     -- tiebreaker signalling for the client's result screen:
     'points_tie',     v_points_tie,     -- true when points were equal and the secondary decided it
     'tie',            v_is_tie,         -- true only on an EXACT push (refund the duel, no transfer)

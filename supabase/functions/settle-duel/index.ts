@@ -47,9 +47,9 @@ const RAW_BOUNDS: Record<string, { min: number; max: number }> = {
   draw: { min: 90, max: 5000 },   // avg reaction ms (elite ~120; reject sub-90)
   bullseye: { min: 0, max: 100 }, // accuracy %
   numbers: { min: 5, max: 300 },  // seconds for 25 tiles (reject sub-5s)
-  oddone: { min: 0, max: 200 },   // tiles found in 30s
+  oddone: { min: 0, max: 45 },    // scoring cap for tiles found in 30s
   chimp: { min: 0, max: 25 },     // memory length (grid is 25 cells)
-  quickmath: { min: 0, max: 200 },// correct answers in 30s
+  quickmath: { min: 0, max: 45 }, // scoring cap for correct answers in 30s
 };
 
 // JS mirror of public.duel_game_pts — keep in lockstep with 003_duels.sql §5 and
