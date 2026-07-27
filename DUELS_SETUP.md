@@ -6,8 +6,10 @@ two independent parts:
 1. **Run the SQL migrations** `supabase/003_duels.sql`, then
    `supabase/004_security_hardening.sql`, then
    `supabase/005_wallet_inventory.sql`, then
-   `supabase/006_game_attempts.sql` (settlement, anti-cheat,
-   server-authoritative scores, wallet, inventory and single-use attempts).
+   `supabase/006_game_attempts.sql`, then
+   `supabase/007_economy_rebalance.sql` (settlement, anti-cheat,
+   server-authoritative scores, wallet, inventory, single-use attempts and
+   balanced coin rewards).
 2. **Deploy the Edge Function** `supabase/functions/settle-duel` (the settlement front door).
 
 Both need **your** Supabase login (dashboard or CLI). Claude cannot do either — it
@@ -15,7 +17,8 @@ has no access to your Supabase account, and these are outward-facing changes tha
 require your explicit confirmation.
 
 Deploy `003_duels.sql`, then `004_security_hardening.sql`, then
-`005_wallet_inventory.sql`, then `006_game_attempts.sql`, then the `settle-duel`
+`005_wallet_inventory.sql`, then `006_game_attempts.sql`, then
+`007_economy_rebalance.sql`, then the `settle-duel`
 Edge Function, and only then deploy the updated client. Migration 004 preserves valid current score balances,
 repairs any legacy negative score to zero, removes direct client writes to score
 tables, and installs validated game/bonus RPCs. Migration 005 creates every
@@ -49,7 +52,11 @@ read-only compatibility fallback for the current score.
    into a new query, and click **Run**.
 6. Open `supabase/006_game_attempts.sql`, copy the **whole file**, paste it into
    a new query, and click **Run**.
-7. Sanity check — run these in a new query and confirm they return without error:
+7. Open `supabase/007_economy_rebalance.sql`, copy the **whole file**, paste it
+   into a new query, and click **Run**. It preserves existing balances and
+   applies the new 5–20 performance rewards and weighted 5–50 coin drops only
+   to future claims.
+8. Sanity check — run these in a new query and confirm they return without error:
 
    ```sql
    -- tables exist

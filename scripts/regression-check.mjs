@@ -5,13 +5,14 @@ import { utcDayKey, utcSeasonEnd, utcSeasonKey, utcSeasonName, utcStreak } from 
 const root = new URL("../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
 const readBytes = (path) => readFile(new URL(path, root));
-const [app, dataLayer, duelsSql, hardeningSql, walletSql, attemptsSql, edgeFunction, indexHtml, manifest, touchIcon] = await Promise.all([
+const [app, dataLayer, duelsSql, hardeningSql, walletSql, attemptsSql, economySql, edgeFunction, indexHtml, manifest, touchIcon] = await Promise.all([
   read("src/App.jsx"),
   read("src/lib/supabase.js"),
   read("supabase/003_duels.sql"),
   read("supabase/004_security_hardening.sql"),
   read("supabase/005_wallet_inventory.sql"),
   read("supabase/006_game_attempts.sql"),
+  read("supabase/007_economy_rebalance.sql"),
   read("supabase/functions/settle-duel/index.ts"),
   read("index.html"),
   read("public/manifest.webmanifest"),
@@ -63,6 +64,16 @@ assert.match(attemptsSql, /create or replace function public\.start_game_attempt
 assert.match(attemptsSql, /create or replace function public\.consume_game_attempt/i);
 assert.match(attemptsSql, /revoke all on function public\.record_game_score\(text/i);
 assert.match(attemptsSql, /revoke all on function public\.settle_duel\(uuid, text/i);
+assert.match(economySql, /greatest\(5, least\(20, round\(v_pts::numeric \/ 50\)::integer\)\)/i);
+assert.match(economySql, /array\[5, 5, 5, 10, 10, 10, 15, 15, 20, 25, 25, 50\]/i);
+assert.match(app, /const DROP_AMOUNTS = \[5, 5, 5, 10, 10, 10, 15, 15, 20, 25, 25, 50\]/);
+const dropAmounts = JSON.parse(`[${app.match(/const DROP_AMOUNTS = \[([^\]]+)\]/)[1]}]`);
+const expectedDrop = dropAmounts.reduce((sum, amount) => sum + amount, 0) / dropAmounts.length;
+const expectedSixGameCoinsAt700Pts = 6 * (14 + expectedDrop);
+assert.ok(
+  expectedSixGameCoinsAt700Pts >= 180 && expectedSixGameCoinsAt700Pts <= 220,
+  "A six-game run at 700 points/game should award roughly 180–220 coins",
+);
 
 assert.match(duelsSql, /duel_raw_is_plausible\(p_game, p_raw\)/);
 assert.match(duelsSql, /profile_id in \(v_challenger, p_defender\)[\s\S]*for update/i);
@@ -113,6 +124,8 @@ assert.match(app, /const activePeriod = useRef\(\{ day: dayKey, season: seasonKe
 assert.match(app, /result\.claimed === false[\s\S]*Daily gift was already claimed/);
 assert.match(app, /current\?\.gameId === gameId[\s\S]*score: awarded/);
 assert.match(app, /@media \(prefers-reduced-motion: reduce\)/);
+assert.match(app, /\.sprite-avatar\s*\{[\s\S]*animation:\s*spriteRun 1\.6s steps\(8\) infinite !important/);
+assert.match(app, /className="sprite-avatar"/);
 assert.doesNotMatch(app, /data:image\/png;base64/);
 assert.doesNotMatch(indexHtml, /user-scalable\s*=\s*no/i);
 assert.doesNotMatch(indexHtml, /maximum-scale/i);

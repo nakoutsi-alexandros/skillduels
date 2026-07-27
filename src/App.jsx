@@ -141,6 +141,11 @@ const FontImport = () => (
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
       }
+      /* Animated avatars are cosmetic content, not layout motion. Keep their
+         identity visible at a gentler speed while reducing every other effect. */
+      .sprite-avatar {
+        animation: spriteRun 1.6s steps(8) infinite !important;
+      }
     }
   `}</style>
 );
@@ -467,9 +472,11 @@ const Avatar = ({ id, size = 44, ring = false, bare = true }) => {
       background: bare ? "transparent" : `linear-gradient(140deg, ${accent}22, ${accent}08)`,
       border: bare ? "none" : `1px solid ${accent}33`, boxShadow: ring && !bare ? `0 0 18px ${accent}55` : "none" }}>
       {sprite ? (
-        <div style={{ width: inner, height: inner, backgroundImage: `url(${sprite.src})`, backgroundRepeat: "no-repeat",
+        <div className="sprite-avatar" aria-hidden="true"
+          style={{ width: inner, height: inner, backgroundImage: `url(${sprite.src})`, backgroundRepeat: "no-repeat",
           backgroundSize: `${sprite.frames * inner}px ${inner}px`, "--sprite-end": `-${sprite.frames * inner}px`,
-          animation: `spriteRun ${(sprite.frames * sprite.frameMs) / 1000}s steps(${sprite.frames}) infinite`, imageRendering: "auto" }} />
+          animation: `spriteRun ${(sprite.frames * sprite.frameMs) / 1000}s steps(${sprite.frames}) infinite`,
+          willChange: "background-position", imageRendering: "auto" }} />
       ) : (
         <img src={AVATAR_IMG[key]} alt="" width={inner} height={inner}
           style={{ maxWidth: bare ? "100%" : "94%", maxHeight: bare ? "100%" : "94%", imageRendering: "auto", objectFit: "contain" }} />
@@ -1949,19 +1956,21 @@ function DuelScreen({ opponent, onDone, avatar, username, stake = 0, gameId = "d
 // a "2× booster" and a "frame shard" too, but neither exists in the game yet and a
 // reward that silently does nothing is worse than no reward.
 const DROPS = [
-  { icon: "🪙", title: "+60 coins", sub: "Every bit counts", coins: 60 },
-  { icon: "🪙", title: "+120 coins", sub: "Nice haul!", coins: 120 },
-  { icon: "💰", title: "+180 coins", sub: "That'll buy something", coins: 180 },
-  { icon: "💎", title: "+250 coins", sub: "Lucky drop!", coins: 250 },
-  { icon: "👑", title: "+400 coins", sub: "Jackpot — rare one!", coins: 400 },
+  { icon: "🪙", title: "+5 coins", sub: "Every bit counts", coins: 5 },
+  { icon: "🪙", title: "+10 coins", sub: "Nice drop!", coins: 10 },
+  { icon: "💰", title: "+15 coins", sub: "Good haul", coins: 15 },
+  { icon: "💰", title: "+20 coins", sub: "Great drop!", coins: 20 },
+  { icon: "💎", title: "+25 coins", sub: "Lucky drop!", coins: 25 },
+  { icon: "👑", title: "+50 coins", sub: "Jackpot — rare one!", coins: 50 },
 ];
-const rollDrop = () => DROPS[Math.floor(Math.random() * DROPS.length)];
+const DROP_AMOUNTS = [5, 5, 5, 10, 10, 10, 15, 15, 20, 25, 25, 50];
 const dropForCoins = (coins) => DROPS.find((drop) => drop.coins === coins) || {
   icon: "🪙",
   title: `+${coins} coins`,
   sub: "Reward collected",
   coins,
 };
+const rollDrop = () => dropForCoins(DROP_AMOUNTS[Math.floor(Math.random() * DROP_AMOUNTS.length)]);
 
 function RevealOverlay({ headline = "Run complete", result, score, pct, rankUp = 0, streak, drop, onOpenDrop, onCollect }) {
   const [openedDrop, setOpenedDrop] = useState(null);
