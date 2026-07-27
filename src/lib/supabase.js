@@ -134,6 +134,26 @@ export async function setNickname(nickname, avatar) {
   }
 }
 
+export async function updateAvatar(avatar) {
+  if (!supabase) return { ok: false, error: "offline" };
+  try {
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth?.user?.id;
+    if (!uid) return { ok: false, error: "offline" };
+    const { error } = await supabase
+      .from("profiles")
+      .update({ avatar: String(avatar || "").slice(0, 64) })
+      .eq("id", uid);
+    if (error) {
+      console.warn("[supabase] updateAvatar error:", error.message);
+      return { ok: false, error: "unknown", message: error.message };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "unknown", message: e?.message || String(e) };
+  }
+}
+
 // The total is server-authoritative. Game, bonus and duel RPCs are its only
 // writers; the browser may read it but can never submit an arbitrary total.
 export async function getMySeasonScore(season) {
@@ -174,6 +194,100 @@ export async function claimDailyBonus(day, season) {
     });
     if (error) {
       console.warn("[supabase] claimDailyBonus error:", error.message);
+      return { ok: false, error: "unknown", message: error.message };
+    }
+    return data || { ok: false, error: "unknown" };
+  } catch (e) {
+    return { ok: false, error: "unknown", message: e?.message || String(e) };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Wallet + inventory. Migration 005 owns every write; browser only requests a
+// validated reward, purchase or equip action and adopts returned server state.
+// ---------------------------------------------------------------------------
+export async function getWalletState() {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.rpc("get_wallet_state");
+    if (error) {
+      console.warn("[supabase] getWalletState error:", error.message);
+      return null;
+    }
+    if (!data?.ok) return null;
+    return {
+      ok: true,
+      coins: Math.max(0, Number(data.coins) || 0),
+      owned: Array.isArray(data.owned) ? data.owned : [],
+      equippedAvatar: typeof data.equipped_avatar === "string" ? data.equipped_avatar : null,
+      equippedFrame: typeof data.equipped_frame === "string" ? data.equipped_frame : null,
+    };
+  } catch (e) {
+    console.warn("[supabase] getWalletState error:", e?.message || e);
+    return null;
+  }
+}
+
+export async function claimGameCoins(gameId, day) {
+  if (!supabase) return { ok: false, error: "offline" };
+  try {
+    const { data, error } = await supabase.rpc("claim_game_coins", {
+      p_game: gameId,
+      p_day: day,
+    });
+    if (error) {
+      console.warn("[supabase] claimGameCoins error:", error.message);
+      return { ok: false, error: "unknown", message: error.message };
+    }
+    return data || { ok: false, error: "unknown" };
+  } catch (e) {
+    return { ok: false, error: "unknown", message: e?.message || String(e) };
+  }
+}
+
+export async function claimRewardDrop(source, gameId, day) {
+  if (!supabase) return { ok: false, error: "offline" };
+  try {
+    const { data, error } = await supabase.rpc("claim_reward_drop", {
+      p_source: source,
+      p_game: gameId || null,
+      p_day: day,
+    });
+    if (error) {
+      console.warn("[supabase] claimRewardDrop error:", error.message);
+      return { ok: false, error: "unknown", message: error.message };
+    }
+    return data || { ok: false, error: "unknown" };
+  } catch (e) {
+    return { ok: false, error: "unknown", message: e?.message || String(e) };
+  }
+}
+
+export async function purchaseCosmetic(itemId) {
+  if (!supabase) return { ok: false, error: "offline" };
+  try {
+    const { data, error } = await supabase.rpc("purchase_cosmetic", {
+      p_item: itemId,
+    });
+    if (error) {
+      console.warn("[supabase] purchaseCosmetic error:", error.message);
+      return { ok: false, error: "unknown", message: error.message };
+    }
+    return data || { ok: false, error: "unknown" };
+  } catch (e) {
+    return { ok: false, error: "unknown", message: e?.message || String(e) };
+  }
+}
+
+export async function equipCosmetic(itemId, slot) {
+  if (!supabase) return { ok: false, error: "offline" };
+  try {
+    const { data, error } = await supabase.rpc("equip_cosmetic", {
+      p_item: itemId || null,
+      p_slot: slot,
+    });
+    if (error) {
+      console.warn("[supabase] equipCosmetic error:", error.message);
       return { ok: false, error: "unknown", message: error.message };
     }
     return data || { ok: false, error: "unknown" };

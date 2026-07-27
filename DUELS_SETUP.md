@@ -3,20 +3,23 @@
 This is the **founder-only** deploy guide for the duel backend foundation. It has
 two independent parts:
 
-1. **Run the SQL migrations** `supabase/003_duels.sql` and then
-   `supabase/004_security_hardening.sql` (settlement, anti-cheat and
-   server-authoritative scores).
+1. **Run the SQL migrations** `supabase/003_duels.sql`, then
+   `supabase/004_security_hardening.sql`, then
+   `supabase/005_wallet_inventory.sql` (settlement, anti-cheat,
+   server-authoritative scores, wallet and inventory).
 2. **Deploy the Edge Function** `supabase/functions/settle-duel` (the settlement front door).
 
 Both need **your** Supabase login (dashboard or CLI). Claude cannot do either — it
 has no access to your Supabase account, and these are outward-facing changes that
 require your explicit confirmation.
 
-Deploy `003_duels.sql`, then `004_security_hardening.sql`, then the
-`settle-duel` Edge Function, and only then deploy the updated client. Migration
-004 preserves valid current balances, repairs any legacy negative balance to
-zero before validating the non-negative constraint, removes direct client
-writes to score tables, and installs the validated game/bonus RPCs.
+Deploy `003_duels.sql`, then `004_security_hardening.sql`, then
+`005_wallet_inventory.sql`, then the `settle-duel` Edge Function, and only then
+deploy the updated client. Migration 004 preserves valid current score balances,
+repairs any legacy negative score to zero, removes direct client writes to score
+tables, and installs validated game/bonus RPCs. Migration 005 creates every
+existing player's wallet at zero and installs server-authoritative coin rewards,
+inventory purchases and equipment.
 
 Nothing here deletes existing data. Migration 004 preserves current balances,
 adds the hardened RPCs, and removes direct client write access to score tables.
@@ -41,13 +44,17 @@ read-only compatibility fallback for the current score.
    `CREATE OR REPLACE`).
 4. Open `supabase/004_security_hardening.sql`, copy the **whole file**, paste it
    into a new query, and click **Run**.
-5. Sanity check — run these in a new query and confirm they return without error:
+5. Open `supabase/005_wallet_inventory.sql`, copy the **whole file**, paste it
+   into a new query, and click **Run**.
+6. Sanity check — run these in a new query and confirm they return without error:
 
    ```sql
    -- tables exist
    select count(*) from public.game_scores;
    select count(*) from public.duels;
    select count(*) from public.notifications;
+   select count(*) from public.wallets;
+   select count(*) from public.shop_catalog;
 
    -- scoring function works (should return 880)
    select public.duel_game_pts('draw', 120);
@@ -70,6 +77,11 @@ read-only compatibility fallback for the current score.
   unlocks remain disabled against the real backend until an ad provider supplies
   a receipt that the server can verify; a client-side "ad watched" flag is not
   trusted.
+- `wallets`, `inventory`, `coin_transactions` and `shop_catalog` keep coins and
+  cosmetics across refreshes/devices. Clients can read their own state but all
+  rewards, purchases and equipment changes go through validating RPCs. Coin-pack
+  purchases remain disabled in production until StoreKit/Play Billing receipts
+  can be verified server-side.
 
 ---
 

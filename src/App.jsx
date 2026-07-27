@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { hasSupabase, getOrCreateSession, getProfile, setNickname, getMySeasonScore, claimDailyBonus, saveDailyRun, getDailyRun, getMyStreak, fetchLeaderboard, deleteAccount, recordGameScore, getDuelableTargets, startDuel, settleDuel, getNotifications, markNotificationsRead } from "./lib/supabase";
+import { hasSupabase, getOrCreateSession, getProfile, setNickname, updateAvatar, getMySeasonScore, claimDailyBonus, getWalletState, claimGameCoins, claimRewardDrop, purchaseCosmetic, equipCosmetic, saveDailyRun, getDailyRun, getMyStreak, fetchLeaderboard, deleteAccount, recordGameScore, getDuelableTargets, startDuel, settleDuel, getNotifications, markNotificationsRead } from "./lib/supabase";
 import { pad2, utcDayKey, utcSeasonEnd, utcSeasonKey, utcSeasonName } from "./lib/time";
 
 // ================= v3 design tokens — neo-brutalist =================
@@ -1946,10 +1946,28 @@ const DROPS = [
   { icon: "👑", title: "+400 coins", sub: "Jackpot — rare one!", coins: 400 },
 ];
 const rollDrop = () => DROPS[Math.floor(Math.random() * DROPS.length)];
+const dropForCoins = (coins) => DROPS.find((drop) => drop.coins === coins) || {
+  icon: "🪙",
+  title: `+${coins} coins`,
+  sub: "Reward collected",
+  coins,
+};
 
-function RevealOverlay({ headline = "Run complete", result, score, pct, rankUp = 0, streak, drop, onCollect }) {
-  const [opened, setOpened] = useState(false);
+function RevealOverlay({ headline = "Run complete", result, score, pct, rankUp = 0, streak, drop, onOpenDrop, onCollect }) {
+  const [openedDrop, setOpenedDrop] = useState(null);
+  const [opening, setOpening] = useState(false);
   useEffect(() => { Sound.win(); }, []);
+
+  const openDrop = async () => {
+    if (opening || openedDrop) return;
+    setOpening(true);
+    const resolved = await onOpenDrop(drop);
+    setOpening(false);
+    if (resolved) {
+      setOpenedDrop(resolved);
+      Sound.win();
+    }
+  };
 
   return (
     <div style={{ position: "absolute", inset: 0, zIndex: 300, background: T.yellow,
@@ -1999,32 +2017,32 @@ function RevealOverlay({ headline = "Run complete", result, score, pct, rankUp =
       {/* The drop — the reason to sit through the reveal */}
       <div style={{ flex: 1, minHeight: 150, display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center", padding: "16px 0" }}>
-        {opened ? (
+        {openedDrop ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
             animation: "burst 500ms ease both" }}>
-            <div style={{ fontSize: 60 }}>{drop.icon}</div>
+            <div style={{ fontSize: 60 }}>{openedDrop.icon}</div>
             <div style={{ textAlign: "center" }}>
-              <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 20, color: INK, textTransform: "uppercase" }}>{drop.title}</div>
-              <div style={{ fontSize: 13, color: T.sub, fontWeight: 700, marginTop: 2 }}>{drop.sub}</div>
+              <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 20, color: INK, textTransform: "uppercase" }}>{openedDrop.title}</div>
+              <div style={{ fontSize: 13, color: T.sub, fontWeight: 700, marginTop: 2 }}>{openedDrop.sub}</div>
             </div>
           </div>
         ) : (
-          <button onClick={() => { setOpened(true); Sound.win(); }}
-            style={{ border: "none", background: "none", cursor: "pointer",
+          <button onClick={openDrop} disabled={opening}
+            style={{ border: "none", background: "none", cursor: opening ? "wait" : "pointer",
               display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
             <div style={{ fontSize: 78, animation: "dropwiggle 1.1s ease-in-out infinite" }}>🎁</div>
             <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 15, color: INK, textTransform: "uppercase" }}>
-              Tap to open your drop
+              {opening ? "Opening…" : "Tap to open your drop"}
             </div>
           </button>
         )}
       </div>
 
-      <button className="pressable" onClick={() => onCollect(opened ? drop : null)}
+      <button className="pressable" onClick={() => onCollect(openedDrop)}
         style={{ width: "100%", flexShrink: 0, border: `${T.bw} solid ${INK}`, cursor: "pointer", padding: 16,
           borderRadius: 12, background: INK, color: T.yellow, boxShadow: "4px 4px 0 rgba(20,18,15,0.35)",
           fontFamily: T.display, fontWeight: 900, fontSize: 16, textTransform: "uppercase" }}>
-        {opened ? "Collect & continue" : "Skip drop"}
+        {openedDrop ? "Collect & continue" : "Skip drop"}
       </button>
     </div>
   );
@@ -2281,7 +2299,7 @@ function Onboarding({ onDone, onClaimNickname }) {
 }
 
 // ================= Shop =================
-function ShopScreen({ coins, owned, onBuy, onBuyCoins, onEquip, equipped }) {
+function ShopScreen({ coins, owned, onBuy, onBuyCoins, onEquip, equippedAvatar, equippedFrame }) {
   const [shopTab, setShopTab] = useState("avatars");
   // The featured drop is the priciest animated avatar — the one worth vaulting.
   const featured = SHOP_ITEMS.find((it) => it.id === "av_volcano") || SHOP_ITEMS[SHOP_ITEMS.length - 1];
@@ -2343,7 +2361,7 @@ function ShopScreen({ coins, owned, onBuy, onBuyCoins, onEquip, equipped }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 110 }}>
           {avatars.map((it) => {
             const isOwned = owned.includes(it.id);
-            const isEquipped = equipped === it.id;
+            const isEquipped = equippedAvatar === it.id;
             const canAfford = coins >= it.cost;
             const animated = !!SPRITE_AVATARS[it.glyph];
             const btnBg = isEquipped ? T.green : isOwned ? T.card2 : canAfford ? T.blue : T.card2;
@@ -2361,7 +2379,8 @@ function ShopScreen({ coins, owned, onBuy, onBuyCoins, onEquip, equipped }) {
                   background: RARITY_BG[it.rarity], border: `2px solid ${INK}`, padding: "1px 6px", borderRadius: 5, marginTop: 5 }}>
                   {it.rarity}
                 </div>
-                <button className="pressable" onClick={() => (isOwned ? onEquip(it.id) : canAfford && onBuy(it))}
+                <button className="pressable" disabled={!isOwned && !canAfford}
+                  onClick={() => (isOwned ? onEquip(it.id) : canAfford && onBuy(it))}
                   style={{ marginTop: 11, width: "100%", border: `${T.bw} solid ${INK}`, borderRadius: 9, padding: 8,
                     fontFamily: T.mono, fontWeight: 700, fontSize: 13, background: btnBg, color: inkOn(btnBg),
                     cursor: isOwned || canAfford ? "pointer" : "not-allowed",
@@ -2378,7 +2397,7 @@ function ShopScreen({ coins, owned, onBuy, onBuyCoins, onEquip, equipped }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 110 }}>
           {frames.map((it) => {
             const isOwned = owned.includes(it.id);
-            const isEquipped = equipped === it.id;
+            const isEquipped = equippedFrame === it.id;
             const canAfford = coins >= it.cost;
             const btnBg = isEquipped ? T.green : isOwned ? T.card2 : canAfford ? T.blue : T.card2;
             return (
@@ -2386,7 +2405,8 @@ function ShopScreen({ coins, owned, onBuy, onBuyCoins, onEquip, equipped }) {
                 display: "flex", flexDirection: "column", alignItems: "center" }}>
                 <FramedAvatar id="knight" size={54} frame={it.frame} />
                 <div style={{ fontFamily: T.mono, fontWeight: 700, fontSize: 14, color: T.text, marginTop: 10 }}>{it.name}</div>
-                <button className="pressable" onClick={() => (isOwned ? onEquip(it.id) : canAfford && onBuy(it))}
+                <button className="pressable" disabled={!isOwned && !canAfford}
+                  onClick={() => (isOwned ? onEquip(it.id) : canAfford && onBuy(it))}
                   style={{ marginTop: 10, width: "100%", border: `${T.bw} solid ${INK}`, borderRadius: 9, padding: 8,
                     fontFamily: T.mono, fontWeight: 700, fontSize: 13, background: btnBg, color: inkOn(btnBg),
                     cursor: isOwned || canAfford ? "pointer" : "not-allowed",
@@ -3100,7 +3120,8 @@ export default function App() {
   const [adPlaying, setAdPlaying] = useState(false);
   const [coins, setCoins] = useState(0);
   const [owned, setOwned] = useState([]); // owned cosmetic ids
-  const [equipped, setEquipped] = useState(null); // equipped cosmetic id
+  const [equippedAvatar, setEquippedAvatar] = useState(null);
+  const [equippedFrame, setEquippedFrame] = useState(null);
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [framed, setFramed] = useState(false);
   useEffect(() => {
@@ -3289,6 +3310,15 @@ export default function App() {
         if (alive && bootNet !== null) setIncomingDelta(bootNet);
         const savedStreak = await getMyStreak(key);
         if (alive && savedStreak !== null) setStreak(savedStreak);
+        const wallet = await getWalletState();
+        if (alive && wallet?.ok) {
+          setCoins(wallet.coins);
+          setOwned(wallet.owned);
+          setEquippedAvatar(wallet.equippedAvatar);
+          setEquippedFrame(wallet.equippedFrame);
+          const savedAvatarItem = SHOP_ITEMS.find((item) => item.id === wallet.equippedAvatar);
+          if (savedAvatarItem?.type === "avatar") setAvatar(savedAvatarItem.glyph);
+        }
       }
       const ownScore = await getMySeasonScore(seasonKey);
       if (alive && ownScore !== null) setServerSeasonPts(ownScore);
@@ -3495,7 +3525,7 @@ export default function App() {
       // data layer no-ops offline / not signed in and never throws, so this cannot
       // break the run. Duel settlement recomputes points server-side, so the
       // client-side `pts` sent here is display-only.
-      recordGameScore(gameId, dayKey, seasonKey, raw, label, secondary).then((res) => {
+      recordGameScore(gameId, dayKey, seasonKey, raw, label, secondary).then(async (res) => {
         const authoritative = Number(res?.balance);
         const awarded = Number(res?.points);
         if (res?.ok) {
@@ -3504,7 +3534,6 @@ export default function App() {
             setPlayedGames((current) => current[gameId]
               ? { ...current, [gameId]: { ...current[gameId], pts: awarded } }
               : current);
-            setCoins((current) => current + Math.round(awarded / 10) - Math.round(pts / 10));
             setReveal((current) => current?.gameId === gameId
               ? {
                   ...current,
@@ -3514,10 +3543,14 @@ export default function App() {
                 }
               : current);
           }
+          const coinResult = await claimGameCoins(gameId, dayKey);
+          const coinBalance = Number(coinResult?.coins);
+          if (coinResult?.ok && Number.isFinite(coinBalance)) setCoins(coinBalance);
+          else if (hasSupabase) showToast("Coin reward sync failed — try again later");
         }
         else if (hasSupabase) showToast("Score saved locally; server sync failed");
       });
-      setCoins((c) => c + Math.round(pts / 10)); // earn coins from performance
+      if (!hasSupabase) setCoins((c) => c + Math.round(pts / 10));
       setElo((e) => e + delta);
       if (firstOfDay) setStreak((s) => s + 1);
       // Bank the run behind the reveal panel instead of a toast that scrolls past.
@@ -3529,6 +3562,7 @@ export default function App() {
         rankUp: Math.max(0, rankAt(seasonPts) - rankAt(seasonPts + pts)),
         streak: streak + (firstOfDay ? 1 : 0),
         drop: rollDrop(),
+        rewardSource: { type: "game", gameId },
         gameId,
       });
     } else {
@@ -3564,12 +3598,29 @@ export default function App() {
       rankUp: Math.max(0, rankAt(seasonPts) - rankAt(seasonPts + 50)),
       streak,
       drop: rollDrop(),
+      rewardSource: { type: "daily_bonus", gameId: null },
     });
   };
 
-  // Applies whatever the drop turned out to be, then closes the panel.
+  const openRevealDrop = async (fallback) => {
+    if (!hasSupabase) return fallback;
+    const source = reveal?.rewardSource;
+    if (!source) return null;
+    const result = await claimRewardDrop(source.type, source.gameId, dayKey);
+    const balance = Number(result?.coins);
+    const amount = Number(result?.amount);
+    if (!result?.ok || !Number.isFinite(balance) || !Number.isFinite(amount)) {
+      showToast("Reward couldn't be opened — try again");
+      return null;
+    }
+    setCoins(balance);
+    return dropForCoins(amount);
+  };
+
+  // Offline demo applies its local drop here. Production balance already changed
+  // atomically when openRevealDrop returned the server-generated reward.
   const collectReveal = (drop) => {
-    if (drop && drop.coins) setCoins((c) => c + drop.coins);
+    if (!hasSupabase && drop?.coins) setCoins((c) => c + drop.coins);
     setReveal(null);
   };
 
@@ -3782,27 +3833,100 @@ export default function App() {
     }, 2600);
   };
 
-  const buyCosmetic = (it) => {
+  const buyCosmetic = async (it) => {
     if (coins < it.cost) return;
+    if (hasSupabase) {
+      const result = await purchaseCosmetic(it.id);
+      if (!result?.ok) {
+        showToast(result?.error === "insufficient_coins"
+          ? "Not enough coins"
+          : "Purchase failed — try again");
+        return;
+      }
+      const balance = Number(result.coins);
+      if (Number.isFinite(balance)) setCoins(balance);
+      setOwned((current) => current.includes(it.id) ? current : [...current, it.id]);
+      setEquippedAvatar(typeof result.equipped_avatar === "string" ? result.equipped_avatar : null);
+      setEquippedFrame(typeof result.equipped_frame === "string" ? result.equipped_frame : null);
+      if (it.type === "avatar") {
+        setAvatar(it.glyph);
+        await updateAvatar(it.glyph);
+      }
+      Sound.win();
+      showToast(`${it.name} unlocked & equipped!`);
+      return;
+    }
     setCoins((c) => c - it.cost);
     setOwned((o) => [...o, it.id]);
-    setEquipped(it.id);
+    if (it.type === "avatar") {
+      setEquippedAvatar(it.id);
+      setAvatar(it.glyph);
+    } else {
+      setEquippedFrame(it.id);
+    }
     Sound.win();
     showToast(`${it.name} unlocked & equipped!`);
   };
   const buyCoins = (pk) => {
-    // Placeholder for IAP — real build calls StoreKit / Play Billing.
+    if (hasSupabase) {
+      showToast("Coin packs require verified StoreKit / Play Billing");
+      return;
+    }
+    // Offline demo only. Production never trusts a client-side purchase flag.
     setCoins((c) => c + pk.coins);
     Sound.win();
     showToast(`+${pk.coins.toLocaleString()} coins (demo purchase)`);
+  };
+  const equipOwned = async (itemId, explicitSlot) => {
+    const item = itemId ? SHOP_ITEMS.find((candidate) => candidate.id === itemId) : null;
+    const slot = explicitSlot || item?.type;
+    if (slot !== "avatar" && slot !== "frame") return;
+    if (!hasSupabase) {
+      if (slot === "avatar") {
+        setEquippedAvatar(itemId);
+        if (item?.glyph) setAvatar(item.glyph);
+      } else {
+        setEquippedFrame(itemId);
+      }
+      return;
+    }
+    const result = await equipCosmetic(itemId, slot);
+    if (!result?.ok) {
+      showToast("Couldn't equip item");
+      return;
+    }
+    setEquippedAvatar(typeof result.equipped_avatar === "string" ? result.equipped_avatar : null);
+    setEquippedFrame(typeof result.equipped_frame === "string" ? result.equipped_frame : null);
+    if (slot === "avatar" && item?.glyph) {
+      setAvatar(item.glyph);
+      await updateAvatar(item.glyph);
+    }
+  };
+  const chooseAvatar = async (glyph) => {
+    const item = SHOP_ITEMS.find((candidate) => candidate.type === "avatar" && candidate.glyph === glyph);
+    if (item) {
+      await equipOwned(item.id, "avatar");
+    } else {
+      setAvatar(glyph);
+      setEquippedAvatar(null);
+      if (hasSupabase) {
+        const result = await equipCosmetic(null, "avatar");
+        if (!result?.ok) {
+          showToast("Couldn't save avatar");
+          return;
+        }
+        await updateAvatar(glyph);
+      }
+    }
+    Sound.beep(700, 0.05);
   };
 
   // Avatars available to equip = all base avatars + any purchased avatar cosmetics.
   const ownedAvatarGlyphs = SHOP_ITEMS.filter((it) => it.type === "avatar" && owned.includes(it.id)).map((it) => it.glyph);
   const avatarOptions = [...AVATARS, ...ownedAvatarGlyphs];
   // Equipped frame (from shop) wraps the profile avatar.
-  const equippedItem = SHOP_ITEMS.find((it) => it.id === equipped);
-  const equippedFrameId = equippedItem && equippedItem.type === "frame" ? equippedItem.frame : null;
+  const equippedFrameItem = SHOP_ITEMS.find((it) => it.id === equippedFrame);
+  const equippedFrameId = equippedFrameItem?.frame || null;
 
   const userEntry = seasonPts > 0 ? { name: username, avatar, pts: seasonPts } : null;
   const game = GAMES.find((g) => g.id === activeGame);
@@ -4029,8 +4153,9 @@ export default function App() {
             {tab === "season" && <SeasonScreen seasonPts={seasonPts} username={username} avatar={avatar}
                 countdown={countdown} seasonName={SEASON_NAME} onRewards={() => setRewardsOpen(true)} board={board} />}
             {tab === "leaderboard" && <LeaderboardScreen userEntry={userEntry} onChallenge={openStake} onHelp={() => { setDuelHelpThen(null); setDuelHelpOpen(true); }} board={board} onRefresh={refreshBoard} refreshing={refreshingBoard} duelable={duelableByName} hasBackend={hasSupabase} />}
-            {tab === "shop" && <ShopScreen coins={coins} owned={owned} equipped={equipped}
-              onBuy={buyCosmetic} onBuyCoins={buyCoins} onEquip={setEquipped} />}
+            {tab === "shop" && <ShopScreen coins={coins} owned={owned}
+              equippedAvatar={equippedAvatar} equippedFrame={equippedFrame}
+              onBuy={buyCosmetic} onBuyCoins={buyCoins} onEquip={equipOwned} />}
             {tab === "profile" && (
               <ProfileScreen elo={elo} streak={streak} playedGames={playedGames} totalPts={totalPts}
                 onEditAvatar={() => setAvatarPickerOpen(true)} equippedFrame={equippedFrameId}
@@ -4043,7 +4168,7 @@ export default function App() {
       </div>
 
       {/* Reward opening animation */}
-      {reveal && <RevealOverlay {...reveal} onCollect={collectReveal} />}
+      {reveal && <RevealOverlay {...reveal} onOpenDrop={openRevealDrop} onCollect={collectReveal} />}
 
       {/* Toast — sits just above the orb so it never covers the run button */}
       {toast && (
@@ -4409,7 +4534,7 @@ export default function App() {
           <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, letterSpacing: 0.3, marginBottom: 10 }}>ICON</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 20 }}>
             {avatarOptions.map((a) => (
-              <button key={a} className="pressable" aria-label={`Select avatar ${a}`} onClick={() => { setAvatar(a); Sound.beep(700, 0.05); }}
+              <button key={a} className="pressable" aria-label={`Select avatar ${a}`} onClick={() => chooseAvatar(a)}
                 style={{ padding: 7, borderRadius: 16, cursor: "pointer", display: "flex", justifyContent: "center",
                   boxSizing: "border-box", width: "100%", minWidth: 0, aspectRatio: "1",
                   border: `${T.bw} solid ${INK}`, boxShadow: avatar === a ? T.shadowMd : T.shadowSm,
@@ -4421,7 +4546,7 @@ export default function App() {
 
           <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, letterSpacing: 0.3, marginBottom: 10 }}>FRAME</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 8 }}>
-            <button className="pressable" onClick={() => setEquipped(null)}
+            <button className="pressable" onClick={() => equipOwned(null, "frame")}
               style={{ padding: 6, borderRadius: 16, cursor: "pointer", background: T.card, boxSizing: "border-box",
                 border: `${T.bw} solid ${INK}`, boxShadow: !equippedFrameId ? T.shadowMd : T.shadowSm, display: "flex", flexDirection: "column",
                 alignItems: "center", gap: 4, width: "100%" }}>
@@ -4429,9 +4554,9 @@ export default function App() {
               <span style={{ fontSize: 11, color: T.sub }}>None</span>
             </button>
             {SHOP_ITEMS.filter((it) => it.type === "frame" && owned.includes(it.id)).map((it) => (
-              <button key={it.id} className="pressable" aria-label={`Equip frame ${it.name}`} onClick={() => setEquipped(it.id)}
+              <button key={it.id} className="pressable" aria-label={`Equip frame ${it.name}`} onClick={() => equipOwned(it.id)}
                 style={{ padding: 6, borderRadius: 16, cursor: "pointer", background: T.card, boxSizing: "border-box",
-                  border: `${T.bw} solid ${INK}`, boxShadow: equipped === it.id ? T.shadowMd : T.shadowSm, display: "flex", flexDirection: "column",
+                  border: `${T.bw} solid ${INK}`, boxShadow: equippedFrame === it.id ? T.shadowMd : T.shadowSm, display: "flex", flexDirection: "column",
                   alignItems: "center", gap: 4, width: "100%" }}>
                 <FramedAvatar id={avatar} size={40} frame={it.frame} />
                 <span style={{ fontSize: 11, color: T.sub, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>{it.name}</span>
@@ -4453,7 +4578,7 @@ export default function App() {
           <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, letterSpacing: 0.3, marginBottom: 8 }}>AVATAR</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 18 }}>
             {avatarOptions.map((a) => (
-              <button key={a} className="pressable" aria-label={`Select avatar ${a}`} onClick={() => setAvatar(a)}
+              <button key={a} className="pressable" aria-label={`Select avatar ${a}`} onClick={() => chooseAvatar(a)}
                 style={{ padding: 7, borderRadius: 16, cursor: "pointer", display: "flex", justifyContent: "center",
                   border: `${T.bw} solid ${INK}`, boxShadow: avatar === a ? T.shadowMd : T.shadowSm,
                   background: avatar === a ? T.yellow : T.card }}>

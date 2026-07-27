@@ -5,11 +5,12 @@ import { utcDayKey, utcSeasonEnd, utcSeasonKey, utcSeasonName, utcStreak } from 
 const root = new URL("../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
 const readBytes = (path) => readFile(new URL(path, root));
-const [app, dataLayer, duelsSql, hardeningSql, edgeFunction, indexHtml, manifest, touchIcon] = await Promise.all([
+const [app, dataLayer, duelsSql, hardeningSql, walletSql, edgeFunction, indexHtml, manifest, touchIcon] = await Promise.all([
   read("src/App.jsx"),
   read("src/lib/supabase.js"),
   read("supabase/003_duels.sql"),
   read("supabase/004_security_hardening.sql"),
+  read("supabase/005_wallet_inventory.sql"),
   read("supabase/functions/settle-duel/index.ts"),
   read("index.html"),
   read("public/manifest.webmanifest"),
@@ -36,6 +37,24 @@ assert.match(hardeningSql, /pg_advisory_xact_lock/i);
 assert.match(hardeningSql, /claim_daily_bonus/i);
 assert.match(hardeningSql, /update public\.scores[\s\S]*where season_pts < 0/i);
 assert.match(hardeningSql, /validate constraint scores_nonnegative/i);
+assert.match(walletSql, /create table if not exists public\.wallets/i);
+assert.match(walletSql, /coin_balance\s+integer not null default 0/i);
+assert.match(walletSql, /equipped_avatar\s+text references public\.shop_catalog/i);
+assert.match(walletSql, /equipped_frame\s+text references public\.shop_catalog/i);
+assert.match(walletSql, /unique \(profile_id, source_key\)/i);
+assert.match(walletSql, /create table if not exists public\.inventory/i);
+assert.match(walletSql, /revoke insert, update, delete on table public\.wallets/i);
+assert.match(walletSql, /create or replace function public\.claim_game_coins/i);
+assert.match(walletSql, /create or replace function public\.claim_reward_drop/i);
+assert.match(walletSql, /create or replace function public\.purchase_cosmetic/i);
+assert.match(walletSql, /pg_advisory_xact_lock\(hashtextextended\('wallet:'/i);
+const clientCatalog = [...app.matchAll(
+  /\{ id: "((?:av|fr)_[^"]+)",\s+type: "(?:avatar|frame)",\s+name: "[^"]+",\s*cost:\s*(\d+)/g,
+)].map(([, id, cost]) => [id, Number(cost)]).sort();
+const serverCatalog = [...walletSql.matchAll(
+  /\('((?:av|fr)_[^']+)', '(?:avatar|frame)', (\d+)\)/g,
+)].map(([, id, cost]) => [id, Number(cost)]).sort();
+assert.deepEqual(serverCatalog, clientCatalog, "Server catalog IDs/prices must match the shop UI");
 
 assert.match(duelsSql, /duel_raw_is_plausible\(p_game, p_raw\)/);
 assert.match(duelsSql, /profile_id in \(v_challenger, p_defender\)[\s\S]*for update/i);
@@ -56,6 +75,16 @@ assert.match(app, /role="dialog"\s+aria-modal="true"/);
 assert.match(app, /role="switch"\s+aria-checked=\{on\}/);
 assert.match(app, /aria-label=\{dir < 0 \? "Previous section" : "Next section"\}/);
 assert.match(app, /const \[coins, setCoins\] = useState\(0\)/);
+assert.match(dataLayer, /rpc\("get_wallet_state"/);
+assert.match(dataLayer, /rpc\("claim_game_coins"/);
+assert.match(dataLayer, /rpc\("claim_reward_drop"/);
+assert.match(dataLayer, /rpc\("purchase_cosmetic"/);
+assert.match(dataLayer, /rpc\("equip_cosmetic"/);
+assert.match(dataLayer, /p_slot: slot/);
+assert.match(app, /equippedAvatar=\{equippedAvatar\} equippedFrame=\{equippedFrame\}/);
+assert.match(app, /if \(!hasSupabase\) setCoins\(\(c\) => c \+ Math\.round\(pts \/ 10\)\)/);
+assert.match(app, /Coin packs require verified StoreKit \/ Play Billing/);
+assert.match(app, /disabled=\{!isOwned && !canAfford\}/);
 assert.match(app, /if \(res && res\.error\) \{\s*setChallengesUsed\(\(n\) => Math\.max\(0, n - 1\)\)/);
 assert.match(app, /const activePeriod = useRef\(\{ day: dayKey, season: seasonKey \}\)/);
 assert.match(app, /result\.claimed === false[\s\S]*Daily gift was already claimed/);
