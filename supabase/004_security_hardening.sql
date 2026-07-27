@@ -10,6 +10,12 @@ drop policy if exists scores_delete_own on public.scores;
 revoke insert, update, delete on table public.scores from anon, authenticated;
 grant select on table public.scores to anon, authenticated;
 
+-- Historical client-written rows may contain negatives. Repair them before the
+-- constraint is validated so those accounts are not permanently unable to earn.
+update public.scores
+  set season_pts = 0, updated_at = now()
+  where season_pts < 0;
+
 do $$
 begin
   if not exists (
@@ -20,6 +26,8 @@ begin
   end if;
 end;
 $$;
+
+alter table public.scores validate constraint scores_nonnegative;
 
 -- A daily game is also written through a validating RPC. Keeping direct INSERT
 -- permission would let a modified client forge pts and create unlimited rows.

@@ -17,3 +17,19 @@ export const utcSeasonEnd = (value = Date.now()) => {
 
 export const utcSeasonName = (value = Date.now(), locale = "en-US") =>
   new Date(value).toLocaleString(locale, { month: "long", timeZone: "UTC" });
+
+export const utcStreak = (referenceDay, playedDays = []) => {
+  const days = playedDays instanceof Set ? playedDays : new Set(playedDays);
+  const cursor = new Date(`${referenceDay}T00:00:00.000Z`);
+  if (!Number.isFinite(cursor.getTime())) return 0;
+
+  // A player's existing streak remains visible before their first game today.
+  if (!days.has(referenceDay)) cursor.setUTCDate(cursor.getUTCDate() - 1);
+
+  let streak = 0;
+  while (days.has(utcDayKey(cursor))) {
+    streak += 1;
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
+  }
+  return streak;
+};

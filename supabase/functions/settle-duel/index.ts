@@ -149,6 +149,9 @@ Deno.serve(async (req: Request) => {
   if (!Number.isFinite(raw)) {
     return json({ ok: false, error: "bad_raw" }, 400);
   }
+  if (new TextEncoder().encode(JSON.stringify(inputs)).byteLength > 16_384) {
+    return json({ ok: false, error: "inputs_too_large" }, 413);
+  }
 
   // --- BOUND the raw performance (reject impossible values) ----------------
   const b = RAW_BOUNDS[gameId];

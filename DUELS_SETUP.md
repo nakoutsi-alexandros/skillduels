@@ -12,9 +12,11 @@ Both need **your** Supabase login (dashboard or CLI). Claude cannot do either â€
 has no access to your Supabase account, and these are outward-facing changes that
 require your explicit confirmation.
 
-Deploy `003_duels.sql`, then `004_security_hardening.sql`, and only then deploy
-the updated client. Migration 004 preserves current balances, removes direct
-client writes to score tables, and installs the validated game/bonus RPCs.
+Deploy `003_duels.sql`, then `004_security_hardening.sql`, then the
+`settle-duel` Edge Function, and only then deploy the updated client. Migration
+004 preserves valid current balances, repairs any legacy negative balance to
+zero before validating the non-negative constraint, removes direct client
+writes to score tables, and installs the validated game/bonus RPCs.
 
 Nothing here deletes existing data. Migration 004 preserves current balances,
 adds the hardened RPCs, and removes direct client write access to score tables.
@@ -64,6 +66,10 @@ read-only compatibility fallback for the current score.
 - `duelable_targets(...)` and `settle_duel(...)` â€” the two `SECURITY DEFINER`
   functions that are the ONLY cross-player read/write path. Raw tables stay
   private (RLS own-rows-only, no public view).
+- The production duel limit is three challenges per UTC day. Ad-earned duel
+  unlocks remain disabled against the real backend until an ad provider supplies
+  a receipt that the server can verify; a client-side "ad watched" flag is not
+  trusted.
 
 ---
 

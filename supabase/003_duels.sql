@@ -377,6 +377,11 @@ begin
   if v_challenger is null then
     return; -- unauthenticated → empty set
   end if;
+  if p_day <> to_char(current_date, 'YYYY-MM-DD')
+     or p_season <> to_char(current_date, 'YYYY-MM')
+     or p_game not in ('draw', 'bullseye', 'numbers', 'oddone', 'chimp', 'quickmath') then
+    return;
+  end if;
 
   select coalesce(season_pts, 0) into v_ch_pts
     from public.scores where profile_id = v_challenger and season = p_season;
@@ -422,7 +427,7 @@ begin
         and d2.created_at > now() - interval '24 hours'
     )
   order by coalesce(s.season_pts, 0) desc
-  limit p_limit;
+  limit greatest(1, least(coalesce(p_limit, 40), 100));
 end;
 $$;
 
@@ -505,8 +510,18 @@ begin
   if not public.duel_raw_is_plausible(p_game, p_raw) then
     return jsonb_build_object('ok', false, 'error', 'implausible_raw');
   end if;
+  if pg_column_size(coalesce(p_inputs, '{}'::jsonb)) > 16384 then
+    return jsonb_build_object('ok', false, 'error', 'inputs_too_large');
+  end if;
+
+  -- Serialize every settlement for the same challenger/day BEFORE checking the
+  -- daily limit. Without this lock, concurrent requests can both observe the
+  -- same remaining slot and settle past the cap.
+  perform pg_advisory_xact_lock(
+    hashtextextended('duel-limit:' || v_challenger::text || ':' || p_day, 0)
+  );
   if (
-    select count(*) >= 8
+    select count(*) >= 3
       from public.duels
       where challenger_id = v_challenger
         and day = p_day

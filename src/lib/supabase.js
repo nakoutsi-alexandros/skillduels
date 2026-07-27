@@ -13,6 +13,7 @@
 // ============================================================================
 
 import { createClient } from "@supabase/supabase-js";
+import { utcStreak } from "./time";
 
 // Vite exposes only variables prefixed with VITE_ to the browser bundle.
 // The anon key is designed to be public (Row Level Security is what protects
@@ -248,13 +249,40 @@ export async function getDailyRun(day) {
   }
 }
 
+// Consecutive scored days for the current player. Empty placeholder rows do not
+// count; a streak may continue through yesterday before today's first game.
+export async function getMyStreak(referenceDay) {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from("daily_runs")
+      .select("day, games")
+      .order("day", { ascending: false })
+      .limit(400);
+    if (error) {
+      console.warn("[supabase] getMyStreak error:", error.message);
+      return null;
+    }
+
+    const playedDays = new Set(
+      (data || [])
+        .filter((row) => row?.games?.played && Object.keys(row.games.played).length > 0)
+        .map((row) => row.day),
+    );
+    return utcStreak(referenceDay, playedDays);
+  } catch (e) {
+    console.warn("[supabase] getMyStreak error:", e?.message || e);
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Fetch the public leaderboard for a season. Returns rows in the exact shape the
-// UI already uses for BOTS: { name, avatar, pts }. Empty array on any failure so
-// callers can fall back to BOTS.
+// UI uses: { name, avatar, pts }. Null means the request failed; [] means the
+// production leaderboard is genuinely empty.
 // ---------------------------------------------------------------------------
 export async function fetchLeaderboard(season, limit = 100) {
-  if (!supabase) return [];
+  if (!supabase) return null;
   try {
     const { data, error } = await supabase
       .from("season_leaderboard")
@@ -265,12 +293,12 @@ export async function fetchLeaderboard(season, limit = 100) {
 
     if (error) {
       console.warn("[supabase] fetchLeaderboard error:", error.message);
-      return [];
+      return null;
     }
     return data || [];
   } catch (e) {
     console.warn("[supabase] fetchLeaderboard error:", e?.message || e);
-    return [];
+    return null;
   }
 }
 
