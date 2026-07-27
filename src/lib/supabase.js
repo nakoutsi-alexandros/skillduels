@@ -43,26 +43,110 @@ const UNIQUE_VIOLATION = "23505"; // duplicate key — nickname already taken
 const RAISE_EXCEPTION = "P0001"; // our validation trigger rejected the name
 
 // ---------------------------------------------------------------------------
-// Session — anonymous-first. Called once on app load. Creates a silent anon
-// user the very first time, then reuses it forever after.
+// Authentication. New visitors choose how they want to enter the app instead of
+// receiving an anonymous account automatically. Existing sessions are verified
+// against Supabase before any private data is loaded.
 // ---------------------------------------------------------------------------
-export async function getOrCreateSession() {
+export async function getExistingSession() {
   if (!supabase) return null;
   try {
     const { data: existing } = await supabase.auth.getSession();
-    if (existing?.session) return existing.session;
-
-    // No session yet → mint a silent anonymous one. Requires "Anonymous sign-ins"
-    // to be enabled in the Supabase dashboard (see SETUP.md).
-    const { data, error } = await supabase.auth.signInAnonymously();
-    if (error) {
-      console.warn("[supabase] anonymous sign-in failed:", error.message);
-      return null;
-    }
-    return data.session;
+    if (!existing?.session) return null;
+    const { data: verified, error } = await supabase.auth.getUser();
+    if (error || !verified?.user) return null;
+    return { ...existing.session, user: verified.user };
   } catch (e) {
-    console.warn("[supabase] getOrCreateSession error:", e?.message || e);
+    console.warn("[supabase] getExistingSession error:", e?.message || e);
     return null;
+  }
+}
+
+export async function signInAsGuest() {
+  if (!supabase) return { ok: false, error: "offline" };
+  try {
+    const { data, error } = await supabase.auth.signInAnonymously();
+    if (error) return { ok: false, error: "auth", message: error.message };
+    return { ok: true, session: data.session, user: data.user };
+  } catch (e) {
+    return { ok: false, error: "unknown", message: e?.message || String(e) };
+  }
+}
+
+export async function signUpWithEmail(email, password) {
+  if (!supabase) return { ok: false, error: "offline" };
+  try {
+    const redirectTo = typeof window !== "undefined" ? window.location.origin : undefined;
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: redirectTo ? { emailRedirectTo: redirectTo } : undefined,
+    });
+    if (error) return { ok: false, error: "auth", message: error.message };
+    return {
+      ok: true,
+      session: data.session,
+      user: data.user,
+      confirmationRequired: !data.session,
+    };
+  } catch (e) {
+    return { ok: false, error: "unknown", message: e?.message || String(e) };
+  }
+}
+
+export async function signInWithEmail(email, password) {
+  if (!supabase) return { ok: false, error: "offline" };
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (error) return { ok: false, error: "auth", message: error.message };
+    return { ok: true, session: data.session, user: data.user };
+  } catch (e) {
+    return { ok: false, error: "unknown", message: e?.message || String(e) };
+  }
+}
+
+export async function signInWithGoogle() {
+  if (!supabase) return { ok: false, error: "offline" };
+  try {
+    const redirectTo = typeof window !== "undefined" ? window.location.origin : undefined;
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: redirectTo ? { redirectTo } : undefined,
+    });
+    if (error) return { ok: false, error: "auth", message: error.message };
+    return { ok: true, url: data.url };
+  } catch (e) {
+    return { ok: false, error: "unknown", message: e?.message || String(e) };
+  }
+}
+
+// Upgrades an anonymous account in place. The auth user id stays the same, so
+// the profile, wallet, inventory and scores remain attached to the player.
+export async function linkGoogleIdentity() {
+  if (!supabase) return { ok: false, error: "offline" };
+  try {
+    const redirectTo = typeof window !== "undefined" ? window.location.origin : undefined;
+    const { data, error } = await supabase.auth.linkIdentity({
+      provider: "google",
+      options: redirectTo ? { redirectTo } : undefined,
+    });
+    if (error) return { ok: false, error: "auth", message: error.message };
+    return { ok: true, url: data?.url };
+  } catch (e) {
+    return { ok: false, error: "unknown", message: e?.message || String(e) };
+  }
+}
+
+export async function signOutAccount() {
+  if (!supabase) return { ok: false, error: "offline" };
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) return { ok: false, error: "auth", message: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: "unknown", message: e?.message || String(e) };
   }
 }
 

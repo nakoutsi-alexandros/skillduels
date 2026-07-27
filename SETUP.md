@@ -4,14 +4,15 @@ Accounts + unique nicknames + a real leaderboard on Supabase. This is written fo
 closed testing (a handful of known testers on an unshared Vercel URL). No public
 launch, no app stores, no in-app purchases yet. The free Supabase tier is fine.
 
-Follow the steps in order. It takes ~10 minutes.
+Follow the steps in order. It takes ~15 minutes.
 
 ---
 
 ## What you're setting up
 
-- A silent **anonymous account** for every player on first load (no signup — the
-  "play in 30 seconds" promise is preserved).
+- A choice between **email/password**, **Google**, or a **guest account**.
+- Guest accounts can be linked to Google later without losing their profile,
+  scores, wallet, coins, or inventory.
 - A **unique nickname** per player, enforced by the database.
 - A **real leaderboard** of actual testers instead of the hardcoded bots.
 - A **delete-my-account** path (GDPR erasure).
@@ -38,16 +39,35 @@ function. Every block is commented in plain language — open the file and read 
 
 ---
 
-## Step 2 — Turn on anonymous sign-ins
+## Step 2 — Configure sign-in providers
 
-The app creates a silent account for each visitor. That has to be enabled:
+### Email and guest access
 
 1. Left sidebar → **Authentication** → **Providers** (or **Sign In / Providers**).
-2. Find **Anonymous sign-ins** and toggle it **ON**. Save.
+2. Enable **Email** with email/password sign-in.
+3. Enable **Anonymous sign-ins** for the explicit "Continue as guest" option.
+4. Under **URL Configuration**, set the Site URL to the deployed app URL and add
+   both the deployed URL and local development URL (for example
+   `http://localhost:5173`) to the redirect allow list.
 
-> Optional email recovery (magic link) is **Phase 2** — not needed for closed
-> testing. The email provider can stay off for now. The client code is structured
-> so it can be added later without touching the schema.
+When **Confirm email** is enabled, a new player must click the confirmation email
+before signing in. This is recommended outside local testing.
+
+### Google sign-in
+
+1. In Google Cloud Console, create an OAuth 2.0 Client ID of type **Web
+   application**.
+2. Add the app's local and deployed URLs as authorized JavaScript origins.
+3. Add Supabase's callback URL as an authorized redirect URI:
+   `https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback`
+4. In Supabase → **Authentication** → **Providers** → **Google**, enable Google
+   and paste the Google Client ID and Client Secret.
+5. Enable **Manual identity linking** in Supabase Auth settings. This lets a guest
+   press "Secure with Google" while keeping the same Supabase user id and all
+   existing progress.
+
+The app requests only Google's basic OpenID profile and email scopes. It does not
+request access to Gmail messages.
 
 ---
 
@@ -82,8 +102,8 @@ immediately. The app never needs them.
    ```
 
 3. `.env` is gitignored — it will not be committed. Good.
-4. Run `npm run dev`. On first load you'll get an anonymous session and be asked
-   to pick a nickname. Pick one, and it's saved to the database.
+4. Run `npm run dev`. On first load, choose email, Google, or guest access, then
+   pick a nickname. The account and nickname are saved to the database.
 
 > Vite only reads env vars at startup. If you edit `.env`, restart `npm run dev`.
 
@@ -108,7 +128,10 @@ Share the resulting Vercel URL only with your testers.
 
 ## How to check it's working
 
-- Open the deployed URL, pick a nickname → you should land in the app.
+- Open the deployed URL → the account gateway should offer email, Google and guest.
+- Create an email account, confirm it if required, then sign in and pick a nickname.
+- Test Google sign-in. Also create a guest, play once, then use **Settings →
+  Secure with Google** and confirm the same nickname, coins and progress remain.
 - In Supabase → **Table Editor** → `profiles`: your row appears (id, nickname,
   avatar).
 - Have a second tester try the **same** nickname → they should see "That nickname

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { hasSupabase, getOrCreateSession, getProfile, setNickname, updateAvatar, getMySeasonScore, claimDailyBonus, getWalletState, claimGameCoins, claimRewardDrop, purchaseCosmetic, equipCosmetic, saveDailyRun, getDailyRun, getMyStreak, fetchLeaderboard, deleteAccount, startGameAttempt, recordGameScore, getDuelableTargets, startDuel, settleDuel, getNotifications, markNotificationsRead } from "./lib/supabase";
+import { hasSupabase, getExistingSession, signInAsGuest, signUpWithEmail, signInWithEmail, signInWithGoogle, linkGoogleIdentity, signOutAccount, getProfile, setNickname, updateAvatar, getMySeasonScore, claimDailyBonus, getWalletState, claimGameCoins, claimRewardDrop, purchaseCosmetic, equipCosmetic, saveDailyRun, getDailyRun, getMyStreak, fetchLeaderboard, deleteAccount, startGameAttempt, recordGameScore, getDuelableTargets, startDuel, settleDuel, getNotifications, markNotificationsRead } from "./lib/supabase";
 import { pad2, utcDayKey, utcSeasonEnd, utcSeasonKey, utcSeasonName } from "./lib/time";
 
 // ================= v3 design tokens — neo-brutalist =================
@@ -513,12 +513,12 @@ const Pill = ({ children, color = T.blue }) => {
 // Loud accents get white text; pale ones (yellow, green, cream) keep the ink.
 const inkOn = (color) => (color === T.blue || color === T.red || color === T.purple || color === T.indigo ? "#fff" : INK);
 
-const BigButton = ({ children, onClick, color = T.blue, style }) => (
-  <button onClick={onClick} className="pressable"
+const BigButton = ({ children, onClick, color = T.blue, style, disabled = false, type = "button" }) => (
+  <button type={type} onClick={onClick} disabled={disabled} className="pressable"
     style={{ width: "100%", padding: "15px 0", borderRadius: 12, border: `${T.bw} solid ${INK}`,
       background: color, color: inkOn(color),
       fontSize: 16, fontWeight: 900, fontFamily: T.display, textTransform: "uppercase", letterSpacing: "0.01em",
-      cursor: "pointer", boxShadow: T.shadowMd, ...style }}>
+      cursor: disabled ? "wait" : "pointer", opacity: disabled ? 0.65 : 1, boxShadow: T.shadowMd, ...style }}>
     {children}
   </button>
 );
@@ -2058,6 +2058,174 @@ function RevealOverlay({ headline = "Run complete", result, score, pct, rankUp =
   );
 }
 
+// ================= Account gateway =================
+function AuthGateway({ onGuest, onSignUp, onSignIn, onGoogle }) {
+  const [mode, setMode] = useState("welcome");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const inputStyle = {
+    width: "100%",
+    padding: "14px 15px",
+    borderRadius: 12,
+    border: `${T.bw} solid ${INK}`,
+    background: T.card,
+    color: INK,
+    fontFamily: T.font,
+    fontSize: 15,
+    fontWeight: 700,
+    outline: "none",
+    boxSizing: "border-box",
+  };
+
+  const run = async (action) => {
+    if (busy) return;
+    setError("");
+    setNotice("");
+    setBusy(true);
+    const result = await action();
+    setBusy(false);
+    if (!result?.ok) {
+      setError(result?.message || "Something went wrong. Please try again.");
+      return;
+    }
+    if (result.confirmationRequired) {
+      setNotice("Check your email to confirm the account, then come back and sign in.");
+      setPassword("");
+    }
+  };
+
+  const submitEmail = (event) => {
+    event.preventDefault();
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !cleanEmail.includes("@")) {
+      setError("Enter a valid email address.");
+      return;
+    }
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+    run(() => mode === "signup"
+      ? onSignUp(cleanEmail, password)
+      : onSignIn(cleanEmail, password));
+  };
+
+  const switchMode = (next) => {
+    setMode(next);
+    setError("");
+    setNotice("");
+    setPassword("");
+  };
+
+  return (
+    <div className="sd-scroll" style={{ height: "100%", overflowY: "auto", boxSizing: "border-box",
+      padding: "52px 24px 34px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <BrandMark size={82} />
+      <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 34, color: INK,
+        textTransform: "uppercase", letterSpacing: "-0.03em", marginTop: 14 }}>Skill Duels</div>
+      <div style={{ color: T.sub, fontWeight: 700, fontSize: 14, textAlign: "center",
+        lineHeight: 1.5, marginTop: 5, marginBottom: 24 }}>
+        Your score. Your rivals. Your account.
+      </div>
+
+      <div style={{ width: "100%", ...sticker(T.card, T.shadow), borderRadius: 18, padding: 18,
+        boxSizing: "border-box" }}>
+        {mode === "welcome" ? (
+          <>
+            <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 21, color: INK,
+              textTransform: "uppercase", marginBottom: 5 }}>Ready to play?</div>
+            <div style={{ color: T.sub, fontSize: 12.5, fontWeight: 700, lineHeight: 1.45, marginBottom: 17 }}>
+              Create a new account, sign in, or try the game as a guest.
+            </div>
+            <BigButton color={T.yellow} onClick={() => switchMode("signup")} disabled={busy}>
+              Create account
+            </BigButton>
+            <BigButton color={T.card2} onClick={() => switchMode("signin")} disabled={busy}
+              style={{ marginTop: 11, boxShadow: T.shadowSm }}>
+              Sign in with email
+            </BigButton>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "17px 0",
+              color: T.sub2, fontSize: 11, fontWeight: 800 }}>
+              <div style={{ height: 2, background: T.card2, flex: 1 }} />OR<div style={{ height: 2, background: T.card2, flex: 1 }} />
+            </div>
+            <BigButton color={T.card} onClick={() => run(onGoogle)} disabled={busy}
+              style={{ boxShadow: T.shadowSm }}>
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 9 }}>
+                <span aria-hidden="true" style={{ width: 23, height: 23, borderRadius: 7, background: "#fff",
+                  border: `2px solid ${INK}`, display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  color: T.blue, fontFamily: T.display, fontWeight: 900, fontSize: 14 }}>G</span>
+                Continue with Google
+              </span>
+            </BigButton>
+            <button type="button" onClick={() => run(onGuest)} disabled={busy}
+              style={{ width: "100%", border: 0, background: "transparent", color: T.sub, cursor: busy ? "wait" : "pointer",
+                padding: "15px 6px 2px", fontFamily: T.font, fontWeight: 800, fontSize: 13 }}>
+              Continue as guest
+            </button>
+            <div style={{ color: T.sub2, fontSize: 10.5, lineHeight: 1.45, textAlign: "center", marginTop: 8 }}>
+              Guest progress stays on this device until you secure it with Google.
+            </div>
+          </>
+        ) : (
+          <form onSubmit={submitEmail}>
+            <button type="button" onClick={() => switchMode("welcome")}
+              style={{ border: 0, background: "transparent", padding: "0 0 12px", cursor: "pointer",
+                color: T.sub, fontFamily: T.font, fontWeight: 800, fontSize: 13 }}>
+              ← Back
+            </button>
+            <div style={{ fontFamily: T.display, fontWeight: 900, fontSize: 21, color: INK,
+              textTransform: "uppercase", marginBottom: 16 }}>
+              {mode === "signup" ? "Create account" : "Welcome back"}
+            </div>
+            <label style={{ display: "block", color: T.sub, fontSize: 11, fontWeight: 800, marginBottom: 6 }}>
+              EMAIL
+            </label>
+            <input aria-label="Email" type="email" autoComplete="email" value={email}
+              onChange={(event) => setEmail(event.target.value)} style={inputStyle} />
+            <label style={{ display: "block", color: T.sub, fontSize: 11, fontWeight: 800,
+              marginTop: 13, marginBottom: 6 }}>PASSWORD</label>
+            <input aria-label="Password" type="password" minLength={8}
+              autoComplete={mode === "signup" ? "new-password" : "current-password"}
+              value={password} onChange={(event) => setPassword(event.target.value)} style={inputStyle} />
+            <div style={{ color: T.sub2, fontSize: 10.5, fontWeight: 700, margin: "7px 0 15px" }}>
+              Minimum 8 characters.
+            </div>
+            <BigButton type="submit" color={mode === "signup" ? T.yellow : T.blue} disabled={busy}>
+              {busy ? "Please wait…" : mode === "signup" ? "Create account" : "Sign in"}
+            </BigButton>
+            <button type="button" onClick={() => switchMode(mode === "signup" ? "signin" : "signup")}
+              style={{ width: "100%", border: 0, background: "transparent", color: T.sub, cursor: "pointer",
+                padding: "15px 6px 0", fontFamily: T.font, fontWeight: 800, fontSize: 12.5 }}>
+              {mode === "signup" ? "Already have an account? Sign in" : "New here? Create an account"}
+            </button>
+          </form>
+        )}
+
+        {error && (
+          <div role="alert" style={{ ...sticker(T.red, "none"), borderRadius: 10, padding: "9px 11px",
+            color: inkOn(T.red), fontSize: 12, fontWeight: 800, lineHeight: 1.4, marginTop: 14 }}>
+            {error}
+          </div>
+        )}
+        {notice && (
+          <div role="status" style={{ ...sticker(T.green, "none"), borderRadius: 10, padding: "9px 11px",
+            color: inkOn(T.green), fontSize: 12, fontWeight: 800, lineHeight: 1.4, marginTop: 14 }}>
+            {notice}
+          </div>
+        )}
+      </div>
+      <div style={{ color: T.sub2, fontSize: 10.5, lineHeight: 1.45, textAlign: "center", marginTop: 17,
+        maxWidth: 300 }}>
+        Google sign-in requests only your basic profile and email. It does not read Gmail messages.
+      </div>
+    </div>
+  );
+}
+
 // ================= Onboarding =================
 // ================= Scoring guide =================
 const SCORING = [
@@ -3062,11 +3230,13 @@ export default function App() {
   const [soundOn, setSoundOn] = useState(true);
 
   // ---- Backend (Supabase) --------------------------------------------------
-  // When keys are present we boot: create the silent anonymous session, load the
+  // When keys are present we boot: verify any saved session, then load the
   // profile (nickname) and the real leaderboard. While that runs we hold a
   // loading gate so the UI never flashes the "nak3d_alex" defaults. With no keys
   // `booting` is false immediately and the app runs on the in-memory BOTS path.
   const [booting, setBooting] = useState(hasSupabase);
+  const [authRequired, setAuthRequired] = useState(false);
+  const [authUser, setAuthUser] = useState(null);
   // `hydrated` gates the debounced saves. It stays false until boot has finished
   // restoring today's run from the backend, so the save effects can NOT fire with
   // the empty startup state (playedGames={}, challengeDelta=0) and clobber the
@@ -3149,6 +3319,7 @@ export default function App() {
   const [confirmDelete, setConfirmDelete] = useState(false); // delete-account confirm sub-state
   const [deleting, setDeleting] = useState(false); // delete RPC in flight
   const [deleteErr, setDeleteErr] = useState(null); // inline error on a failed delete
+  const [accountBusy, setAccountBusy] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   // "How duels work" explainer. Openable on demand from the duel sheets, and
@@ -3280,12 +3451,24 @@ export default function App() {
     };
   }, [dayKey, seasonKey, hydrated]);
 
-  // ---- Boot: session → profile → leaderboard (runs once) -------------------
+  // ---- Boot: verified session → profile → leaderboard (runs once) ----------
   useEffect(() => {
     if (!hasSupabase) return; // no keys → stay on the in-memory BOTS path
     let alive = true;
     (async () => {
-      await getOrCreateSession(); // silent anonymous account on first ever load
+      const session = await getExistingSession();
+      if (!session) {
+        if (alive) {
+          setAuthRequired(true);
+          setHydrated(true);
+          setBooting(false);
+        }
+        return;
+      }
+      if (alive) {
+        setAuthUser(session.user);
+        setAuthRequired(false);
+      }
       const profile = await getProfile();
       if (alive && profile?.nickname) {
         // Returning player: adopt their saved identity and skip onboarding.
@@ -3515,6 +3698,28 @@ export default function App() {
     }
     setDeleting(false);
     setDeleteErr("Couldn't delete your account. Check your connection and try again.");
+  };
+
+  const connectGoogleAccount = async () => {
+    if (!hasSupabase || accountBusy) return;
+    setAccountBusy(true);
+    const result = await linkGoogleIdentity();
+    if (!result.ok) {
+      setAccountBusy(false);
+      showToast(result.message || "Couldn't connect Google");
+    }
+  };
+
+  const runSignOut = async () => {
+    if (!hasSupabase || accountBusy || authUser?.is_anonymous) return;
+    setAccountBusy(true);
+    const result = await signOutAccount();
+    if (result.ok) {
+      window.location.reload();
+      return;
+    }
+    setAccountBusy(false);
+    showToast(result.message || "Couldn't sign out");
   };
 
   // Where you'd land on the season board with a given point total.
@@ -4030,7 +4235,7 @@ export default function App() {
     );
   };
 
-  // Loading gate: hold the app while the anonymous session + profile load so we
+  // Loading gate: hold the app while the saved session + profile load so we
   // never flash the default identity before the real one arrives.
   if (booting)
     return shell(
@@ -4044,6 +4249,28 @@ export default function App() {
           Loading…
         </div>
       </div>
+    );
+
+  if (authRequired)
+    return shell(
+      <AuthGateway
+        onGuest={async () => {
+          const result = await signInAsGuest();
+          if (result.ok) window.location.reload();
+          return result;
+        }}
+        onSignUp={async (email, password) => {
+          const result = await signUpWithEmail(email, password);
+          if (result.ok && result.session) window.location.reload();
+          return result;
+        }}
+        onSignIn={async (email, password) => {
+          const result = await signInWithEmail(email, password);
+          if (result.ok) window.location.reload();
+          return result;
+        }}
+        onGoogle={signInWithGoogle}
+      />
     );
 
   if (!onboarded)
@@ -4619,6 +4846,44 @@ export default function App() {
       {settingsOpen && (
         <Sheet onClose={() => { setSettingsOpen(false); setConfirmDelete(false); setDeleteErr(null); }} label="Settings">
           <div style={{ fontSize: 20, fontWeight: 700, fontFamily: T.display, marginBottom: 16 }}>Settings</div>
+          {hasSupabase && authUser && (
+            <>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, letterSpacing: 0.3, marginBottom: 8 }}>ACCOUNT</div>
+              <div style={{ ...sticker(T.card, T.shadowSm), borderRadius: 16, padding: "14px 15px", marginBottom: 18 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: INK }}>
+                      {authUser.is_anonymous ? "Guest account" : "Account secured"}
+                    </div>
+                    <div style={{ color: T.sub, fontSize: 11.5, fontWeight: 700, marginTop: 2,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {authUser.is_anonymous
+                        ? "Protect your progress before changing devices."
+                        : authUser.email || "Connected account"}
+                    </div>
+                  </div>
+                  <span style={{ flexShrink: 0, border: `2px solid ${INK}`, borderRadius: 999,
+                    padding: "5px 8px", background: authUser.is_anonymous ? T.yellow : T.green,
+                    color: INK, fontSize: 10, fontWeight: 900 }}>
+                    {authUser.is_anonymous ? "GUEST" : "VERIFIED"}
+                  </span>
+                </div>
+                {authUser.is_anonymous ? (
+                  <BigButton color={T.card2} onClick={connectGoogleAccount} disabled={accountBusy}
+                    style={{ marginTop: 13, boxShadow: "none", padding: "11px 0", fontSize: 13 }}>
+                    {accountBusy ? "Connecting…" : "Secure with Google"}
+                  </BigButton>
+                ) : (
+                  <button type="button" onClick={runSignOut} disabled={accountBusy}
+                    style={{ width: "100%", border: 0, borderTop: `2px solid ${T.card2}`, background: "transparent",
+                      color: T.sub, cursor: accountBusy ? "wait" : "pointer", padding: "12px 2px 0", marginTop: 12,
+                      fontFamily: T.font, fontWeight: 800, fontSize: 12.5 }}>
+                    {accountBusy ? "Signing out…" : "Sign out"}
+                  </button>
+                )}
+              </div>
+            </>
+          )}
           <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, letterSpacing: 0.3, marginBottom: 8 }}>AVATAR</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 18 }}>
             {avatarOptions.map((a) => (
