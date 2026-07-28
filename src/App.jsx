@@ -405,22 +405,6 @@ const GAMES = [
   { id: "quickmath", name: "Quick Math",  icon: "divide", emoji: "➗", desc: "True or false, fast",          color: T.yellow, bg: "#FFE08A" },
 ];
 
-const BOTS = [
-  { name: "nikos.dev", avatar: "flameorb", pts: 24820, friend: true, skill: 255 },
-  { name: "maria_k", avatar: "seahorse", pts: 23180, friend: false, skill: 265 },
-  { name: "SpirosGG", avatar: "sprout", pts: 21640, friend: true, skill: 270 },
-  { name: "elena.p", avatar: "moth", pts: 19970, friend: false, skill: 280 },
-  { name: "TheoFast", avatar: "dragon", pts: 18450, friend: false, skill: 262 },
-  { name: "katerina__", avatar: "reaper", pts: 16720, friend: true, skill: 290 },
-  { name: "GiorgosX", avatar: "knight", pts: 14380, friend: false, skill: 300 },
-  { name: "dimitra.m", avatar: "cactusmage", pts: 12240, friend: false, skill: 310 },
-  { name: "PanosOne", avatar: "orb", pts: 9870, friend: true, skill: 315 },
-  { name: "vasilis_r", avatar: "comet", pts: 7640, friend: false, skill: 330 },
-  { name: "IoannaZ", avatar: "mushroom", pts: 5310, friend: false, skill: 345 },
-  { name: "kostas.gr", avatar: "starslime", pts: 3180, friend: true, skill: 360 },
-];
-
-
 const AVATAR_IMG = {"flameorb": "/avatars/ui/flameorb.png", "wizard": "/avatars/ui/wizard.png", "sprout": "/avatars/ui/sprout.png", "mushroom": "/avatars/ui/mushroom.png", "starslime": "/avatars/ui/starslime.png", "beefae": "/avatars/ui/beefae.png", "reaper": "/avatars/ui/reaper.png", "dragon": "/avatars/ui/dragon.png", "knight": "/avatars/ui/knight.png", "kitsune": "/avatars/ui/kitsune.png", "potion": "/avatars/ui/potion.png", "orb": "/avatars/ui/orb.png", "cactusmage": "/avatars/ui/cactusmage.png", "comet": "/avatars/ui/comet.png", "moth": "/avatars/ui/moth.png", "seahorse": "/avatars/ui/seahorse.png"};
 
 // ================= Pixel-art avatars =================
@@ -484,14 +468,6 @@ const Avatar = ({ id, size = 44, ring = false, bare = true }) => {
     </div>
   );
 };
-
-const WEEK_HISTORY = [1420, 1780, 2050, 1660, 2240, 1980]; // last 6 days, today is live
-
-const ACTIVITY = [
-  { avatar: "flameorb", text: "nikos.dev passed you on the leaderboard", time: "12m ago" },
-  { avatar: "sprout", text: "SpirosGG set a 219ms Reaction record", time: "41m ago" },
-  { avatar: "reaper", text: "katerina__ unlocked Full House", time: "2h ago" },
-];
 
 // ================= UI atoms =================
 const Card = ({ children, style, onClick, delay = 0 }) => (
@@ -2660,13 +2636,20 @@ function ShopScreen({ coins, owned, onBuy, onBuyCoins, onEquip, equippedAvatar, 
 }
 
 // ================= Screens =================
-function TodayScreen({ playedGames, openGame, openPractice, onPractice, streak, totalPts, countdown, rewardClaimed, claimReward, onShare, onDuel, onHelp, balance, challengesLeft, onWatchAd, canWatchAd, adSlotsLeft, username, avatar, coins, elo }) {
+function TodayScreen({ playedGames, openGame, openPractice, onPractice, streak, totalPts, countdown, rewardClaimed, claimReward, onShare, onDuel, onHelp, balance, challengesLeft, onWatchAd, canWatchAd, adSlotsLeft, username, avatar, coins, elo, community = [] }) {
   const playedCount = Object.keys(playedGames).length;
   const total = GAMES.length;
   const allDone = playedCount >= total;
   const nextGame = GAMES.find((g) => !playedGames[g.id]) || GAMES[0];
   const tier = tierOf(elo);
   const gamesRef = useRef(null);
+  const communityPlayers = community
+    .filter((player) => player?.name && player.name !== username)
+    .slice(0, 3);
+  const communityNames = communityPlayers.map((player) => player.name);
+  const communityLabel = communityNames.length > 1
+    ? `${communityNames.slice(0, -1).join(", ")} & ${communityNames.at(-1)}`
+    : communityNames[0] || "";
 
   return (
     <div style={{ paddingBottom: 130 }}>
@@ -2737,18 +2720,22 @@ function TodayScreen({ playedGames, openGame, openPractice, onPractice, streak, 
         )}
       </div>
 
-      {/* Social proof */}
-      <div style={{ display: "flex", alignItems: "center", gap: 11, marginTop: 14,
-        ...sticker(T.green, T.shadowMd), borderRadius: 14, padding: "11px 14px" }}>
-        <div style={{ display: "flex" }}>
-          {ACTIVITY.map((a, i) => (
-            <div key={i} style={{ marginLeft: i ? -10 : 0 }}><Avatar id={a.avatar} size={26} /></div>
-          ))}
+      {/* Database-backed community proof. Hidden when the leaderboard is empty. */}
+      {communityPlayers.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 11, marginTop: 14,
+          ...sticker(T.green, T.shadowMd), borderRadius: 14, padding: "11px 14px" }}>
+          <div style={{ display: "flex" }}>
+            {communityPlayers.map((player, i) => (
+              <div key={player.name} style={{ marginLeft: i ? -10 : 0 }}>
+                <Avatar id={player.avatar} size={26} />
+              </div>
+            ))}
+          </div>
+          <div style={{ flex: 1, fontSize: 12.5, color: "#083D28", fontWeight: 800, lineHeight: 1.25 }}>
+            {communityLabel} {communityPlayers.length === 1 ? "is" : "are"} on the leaderboard.
+          </div>
         </div>
-        <div style={{ flex: 1, fontSize: 12.5, color: "#083D28", fontWeight: 800, lineHeight: 1.25 }}>
-          nikos.dev, SpirosGG & katerina__ already played. Catch up!
-        </div>
-      </div>
+      )}
 
       {/* Secondary actions */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginTop: 14 }}>
@@ -2832,25 +2819,33 @@ function TodayScreen({ playedGames, openGame, openPractice, onPractice, streak, 
         )}
       </div>
 
-      {/* Live activity */}
-      <div style={{ fontFamily: T.display, fontWeight: 800, fontSize: 17, color: T.text,
-        textTransform: "uppercase", margin: "22px 2px 12px" }}>Live activity</div>
-      <div style={{ ...sticker(T.card, T.shadowMd), borderRadius: 14, overflow: "hidden" }}>
-        {ACTIVITY.map((a, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 13px",
-            borderBottom: i < ACTIVITY.length - 1 ? `2px solid ${INK}` : "none" }}>
-            <div style={{ flexShrink: 0 }}><Avatar id={a.avatar} size={34} /></div>
-            <div style={{ flex: 1, lineHeight: 1.3, fontSize: 12.5, color: T.sub, fontWeight: 600 }}>{a.text}</div>
-            <div style={{ fontSize: 10, color: T.sub2, fontWeight: 800, flexShrink: 0 }}>{a.time}</div>
+      {/* Real Supabase leaderboard rows only — no fabricated activity or times. */}
+      {communityPlayers.length > 0 && (
+        <>
+          <div style={{ fontFamily: T.display, fontWeight: 800, fontSize: 17, color: T.text,
+            textTransform: "uppercase", margin: "22px 2px 12px" }}>From the leaderboard</div>
+          <div style={{ ...sticker(T.card, T.shadowMd), borderRadius: 14, overflow: "hidden" }}>
+            {communityPlayers.map((player, i) => (
+              <div key={player.name} style={{ display: "flex", alignItems: "center", gap: 11, padding: "11px 13px",
+                borderBottom: i < communityPlayers.length - 1 ? `2px solid ${INK}` : "none" }}>
+                <div style={{ flexShrink: 0 }}><Avatar id={player.avatar} size={34} /></div>
+                <div style={{ flex: 1, lineHeight: 1.3, fontSize: 12.5, color: T.sub, fontWeight: 600 }}>
+                  {player.name}
+                </div>
+                <div style={{ fontFamily: T.mono, fontSize: 11, color: T.blue, fontWeight: 800, flexShrink: 0 }}>
+                  {Number(player.pts || 0).toLocaleString()} pts
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      )}
     </div>
   );
 }
 
-function SeasonScreen({ seasonPts, username, avatar, countdown, seasonName, onRewards, board = BOTS }) {
-  // `board` is the real leaderboard when Supabase is configured, otherwise BOTS.
+function SeasonScreen({ seasonPts, username, avatar, countdown, seasonName, onRewards, board = [] }) {
+  // `board` contains real Supabase leaderboard rows only.
   // Filter out my own server row so I'm not listed twice next to my live "me" row.
   const others = board.filter((b) => b.name !== username);
   const rows = [...others.map((b) => ({ name: b.name, avatar: b.avatar, pts: b.pts })), { name: username, avatar, pts: seasonPts, me: true }].sort((a, b) => b.pts - a.pts);
@@ -2936,10 +2931,10 @@ function SeasonScreen({ seasonPts, username, avatar, countdown, seasonName, onRe
   );
 }
 
-function LeaderboardScreen({ userEntry, onChallenge, onHelp, board = BOTS, onRefresh, refreshing, duelable = null, hasBackend = false }) {
+function LeaderboardScreen({ userEntry, onChallenge, onHelp, board = [], onRefresh, refreshing, duelable = null, hasBackend = false }) {
   const [filter, setFilter] = useState("global");
-  // `board` is real leaderboard rows { name, avatar, pts } when Supabase is on,
-  // else the BOTS demo set. Drop my own server row so my live "me" row is unique.
+  // `board` contains real leaderboard rows { name, avatar, pts }. Drop my own
+  // server row so my live "me" row is unique.
   const others = board.filter((b) => !userEntry || b.name !== userEntry.name);
   let rows = [...others.map((b) => ({ name: b.name, avatar: b.avatar, pts: b.pts, me: false })), ...(userEntry ? [{ ...userEntry, me: true }] : [])];
   // No friends system in Phase 1 — real rows carry no `friend` flag, so this view
@@ -3257,7 +3252,7 @@ export default function App() {
   // When keys are present we boot: verify any saved session, then load the
   // profile (nickname) and the real leaderboard. While that runs we hold a
   // loading gate so the UI never flashes the "nak3d_alex" defaults. With no keys
-  // `booting` is false immediately and the app runs on the in-memory BOTS path.
+  // `booting` is false immediately and the app runs without backend data.
   const [booting, setBooting] = useState(hasSupabase);
   const [authRequired, setAuthRequired] = useState(false);
   const [authUser, setAuthUser] = useState(null);
@@ -3268,10 +3263,9 @@ export default function App() {
   // immediately when there is no backend to restore from).
   const [hydrated, setHydrated] = useState(!hasSupabase);
   const [periodHydrating, setPeriodHydrating] = useState(false);
-  // `board` feeds every leaderboard/season/rank read. Defaults to the BOTS demo
-  // set (mapped to the { name, avatar, pts } shape) and is replaced with real
-  // rows when the fetch succeeds — so nothing breaks if the backend is absent.
-  const [board, setBoard] = useState(() => BOTS.map((b) => ({ name: b.name, avatar: b.avatar, pts: b.pts })));
+  // `board` feeds every leaderboard/season/rank read and contains only rows
+  // fetched from Supabase. Empty means the database has no visible rows yet.
+  const [board, setBoard] = useState([]);
   const [refreshingBoard, setRefreshingBoard] = useState(false);
 
   const [tab, setTab] = useState("today");
@@ -3300,7 +3294,7 @@ export default function App() {
   // Cross-player duelability, keyed by nickname → { defenderId, name, avatar, pts,
   // games: { [gameId]: { snapshotPts, snapshotLabel } } }. Only players who scored a
   // game today AND pass the server's band/shield/grace/cooldown checks appear here;
-  // everyone else is non-selectable in the UI. Empty on the offline (BOTS) path.
+  // everyone else is non-selectable in the UI. Empty without a backend.
   const [duelableByName, setDuelableByName] = useState({});
   const [duelableLoading, setDuelableLoading] = useState(false);
   const [duelNotifs, setDuelNotifs] = useState([]); // unread "you got dueled" notifications to surface
@@ -3477,7 +3471,7 @@ export default function App() {
 
   // ---- Boot: verified session → profile → leaderboard (runs once) ----------
   useEffect(() => {
-    if (!hasSupabase) return; // no keys → stay on the in-memory BOTS path
+    if (!hasSupabase) return; // no keys → stay on the empty offline path
     let alive = true;
     (async () => {
       const session = await getExistingSession();
@@ -3747,7 +3741,7 @@ export default function App() {
   };
 
   // Where you'd land on the season board with a given point total.
-  // Uses the real leaderboard (`board`) when present, BOTS otherwise.
+  // Uses only real leaderboard rows fetched into `board`.
   const rankAt = (pts) => [...board.filter((b) => b.name !== username).map((b) => b.pts), pts].sort((a, b) => b - a).indexOf(pts) + 1;
 
   const launchGame = async (gameId, practice = false) => {
@@ -4443,7 +4437,7 @@ export default function App() {
                 countdown={countdown} rewardClaimed={rewardClaimed} claimReward={claimReward}
                 onShare={() => { setShareOpen(true); setCopied(false); }} onDuel={() => { if (!guardDuelIntro("picker")) setPickerOpen(true); }}
                 onHelp={() => setTab("shop")} balance={balance} challengesLeft={challengesLeft} onWatchAd={() => watchAdDirect()} canWatchAd={canWatchAd} adSlotsLeft={MAX_AD_DUELS - adDuels}
-                username={username} avatar={avatar} coins={coins} elo={elo} />
+                username={username} avatar={avatar} coins={coins} elo={elo} community={board} />
             )}
             {tab === "season" && <SeasonScreen seasonPts={seasonPts} username={username} avatar={avatar}
                 countdown={countdown} seasonName={SEASON_NAME} onRewards={() => setRewardsOpen(true)} board={board} />}
@@ -4475,9 +4469,8 @@ export default function App() {
         </div>
       )}
 
-      {/* Matchmaking picker → routes to stake. Server path lists REAL duelable
-          targets (players who scored a game today and pass band/shield/grace/
-          cooldown); offline falls back to BOTS. */}
+      {/* Matchmaking picker → routes to stake. Lists only real duelable targets
+          returned by Supabase (players who scored today and pass all guards). */}
       {pickerOpen && (() => {
         const targets = hasSupabase ? Object.values(duelableByName) : null;
         return (
@@ -4514,18 +4507,14 @@ export default function App() {
               </div>
             )
           ) : (
-            BOTS.map((f) => (
-              <div key={f.name} className="pressable" onClick={() => { setPickerOpen(false); openStake(f); }}
-                style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 10px", borderRadius: 14, cursor: "pointer",
-                  borderBottom: `2px solid ${INK}` }}>
-                <Avatar id={f.avatar} size={44} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 15, display: "flex", alignItems: "center", gap: 6 }}>{f.name} {f.friend && <Icon name="users" size={12} color={T.sub2} strokeWidth={2.1} />}</div>
-                  <div style={{ color: T.sub, fontSize: 12 }}>~{f.skill} ms average · {f.pts} pts</div>
-                </div>
-                <Pill color={T.red}>Stake</Pill>
+            <div style={{ ...sticker(T.card, T.shadowSm), borderRadius: 14, padding: "24px 18px", textAlign: "center",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 26 }}>🔌</span>
+              <div style={{ fontWeight: 800, fontSize: 15, color: T.text }}>Database connection required</div>
+              <div style={{ color: T.sub, fontSize: 12.5, lineHeight: 1.4, maxWidth: 250 }}>
+                Opponents appear here only when they are returned by the live database.
               </div>
-            ))
+            </div>
           )}
         </Sheet>
         );
@@ -4920,10 +4909,15 @@ export default function App() {
             ))}
           </div>
           <div style={{ fontSize: 13, fontWeight: 700, color: T.sub, letterSpacing: 0.3, marginBottom: 8 }}>USERNAME</div>
-          <input aria-label="Username" value={username} onChange={(e) => setUsername(e.target.value.slice(0, 16))} autoComplete="off"
-            style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: `${T.bw} solid ${INK}`,
-              background: T.card, color: INK, fontSize: 16, fontFamily: T.font, outline: "none",
-              marginBottom: 18, boxSizing: "border-box" }} />
+          {/* The nickname is chosen ONCE at sign-up and locked. It's your public identity in
+              duels and on the leaderboard, so it can't be edited here — read-only on purpose. */}
+          <div style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: `${T.bw} solid ${INK}`,
+            background: T.card2, color: INK, fontSize: 16, fontFamily: T.font, marginBottom: 6,
+            boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span>{username}</span>
+            <Icon name="shield" size={15} color={T.sub} strokeWidth={2.1} />
+          </div>
+          <div style={{ fontSize: 12, color: T.sub, marginBottom: 18 }}>Your username is set once at sign-up and can't be changed.</div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
             background: T.card, border: `${T.bw} solid ${INK}`, borderRadius: 16, padding: "14px 16px", marginBottom: 18 }}>
             <div>
@@ -4940,7 +4934,7 @@ export default function App() {
           )}
 
           {/* Danger zone — GDPR erasure. Only shown with a real backend (there is no
-              account to delete on the offline BOTS path). A single tap opens a
+              account to delete on the offline no-backend path). A single tap opens a
               confirm sub-state; deletion only fires on the explicit second tap. */}
           {hasSupabase && (
             <div style={{ marginTop: 10, marginBottom: 4, paddingTop: 16, borderTop: `${T.bw} solid ${T.card2}` }}>
